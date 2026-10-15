@@ -1,0 +1,1 @@
+# Friendly's Management Plugin
