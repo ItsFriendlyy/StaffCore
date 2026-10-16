@@ -26,9 +26,15 @@ public class PunishmentListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPreLogin(AsyncPlayerPreLoginEvent event) {
+        // If MySQL is enabled, refresh data live from the shared database
+        if (plugin.getPunishmentManager().getDatabaseManager() != null &&
+            plugin.getPunishmentManager().getDatabaseManager().isEnabled()) {
+            plugin.getPunishmentManager().loadData();
+        }
+
         UUID uuid = event.getUniqueId();
-        
-        // OP players automatically bypass any ban checks on login
+
+        // 1. Operators automatically bypass any ban checks on login
         OfflinePlayer opCheck = Bukkit.getOfflinePlayer(uuid);
         if (opCheck != null && opCheck.isOp()) {
             return;
@@ -37,14 +43,14 @@ public class PunishmentListener implements Listener {
         InetAddress address = event.getAddress();
         String ip = address != null ? address.getHostAddress() : "";
 
-        // Check IP Ban
+        // 2. Check IP Ban
         Punishment ipBan = plugin.getPunishmentManager().getActiveIpBan(ip);
         if (ipBan != null) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, plugin.getPunishmentManager().getBanKickMessage(ipBan));
             return;
         }
 
-        // Check UUID Ban
+        // 3. Check UUID Ban
         Punishment uuidBan = plugin.getPunishmentManager().getActiveBan(uuid);
         if (uuidBan != null) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, plugin.getPunishmentManager().getBanKickMessage(uuidBan));
@@ -56,7 +62,7 @@ public class PunishmentListener implements Listener {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
-        // OPs bypass mutes
+        // 1. Check mute status (OPs and players with bypass permission are exempt)
         if (!player.isOp() && !player.hasPermission("staffcore.bypass.mute")) {
             Punishment mute = plugin.getPunishmentManager().getActiveMute(uuid);
             if (mute != null) {
@@ -75,7 +81,7 @@ public class PunishmentListener implements Listener {
             }
         }
 
-        // Staff chat toggle
+        // 2. Route message to staff channel if player is in staff chat mode
         if (plugin.getStaffChatManager().isInStaffChat(uuid)) {
             event.setCancelled(true);
             plugin.getStaffChatManager().sendStaffMessage(player, event.getMessage());

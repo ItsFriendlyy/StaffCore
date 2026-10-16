@@ -10,6 +10,9 @@ import com.github.staffcore.listeners.VanishListener;
 import com.github.staffcore.punishment.PunishmentManager;
 import com.github.staffcore.staffchat.StaffChatManager;
 import com.github.staffcore.vanish.VanishManager;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -24,7 +27,7 @@ public final class StaffCore extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        // Save default config
+        // Save default config.yml
         saveDefaultConfig();
 
         // Initialize Managers
@@ -34,14 +37,14 @@ public final class StaffCore extends JavaPlugin {
         this.staffChatManager = new StaffChatManager(this);
         this.vanishManager = new VanishManager(this);
 
-        // Register Listeners
+        // Register Event Listeners
         PluginManager pm = getServer().getPluginManager();
         pm.registerEvents(new PunishmentListener(this), this);
         pm.registerEvents(new FreezeListener(this), this);
         pm.registerEvents(new VanishListener(this), this);
-        pm.registerEvents(new GuiListener(), this);
+        pm.registerEvents(new GuiListener(this), this);
 
-        // Register Commands & Tab Completers
+        // Register Commands & Tab Completion
         registerCommands();
 
         getLogger().info("StaffCore has been successfully enabled! Ready for moderation.");
@@ -52,8 +55,14 @@ public final class StaffCore extends JavaPlugin {
         if (freezeManager != null) {
             freezeManager.stop();
         }
+        if (vanishManager != null) {
+            vanishManager.stop();
+        }
         if (punishmentManager != null) {
             punishmentManager.saveData();
+            if (punishmentManager.getDatabaseManager() != null) {
+                punishmentManager.getDatabaseManager().close();
+            }
         }
         getLogger().info("StaffCore has been successfully disabled.");
     }
@@ -62,9 +71,9 @@ public final class StaffCore extends JavaPlugin {
         PunishCommands punishExecutor = new PunishCommands(this);
         StaffTabCompleter tabCompleter = new StaffTabCompleter();
 
-        String[] punishCmds = {"ban", "tempban", "ipban", "tempipban", "unban", "unbanip", "mute", "tempmute", "unmute", "warn"};
-        for (String cmdName : punishCmds) {
-            PluginCommand cmd = getCommand(cmdName);
+        String[] punishCmds = new String[]{"ban", "tempban", "ipban", "tempipban", "unban", "unbanip", "mute", "tempmute", "unmute", "warn"};
+        for (int i = 0; i < punishCmds.length; i++) {
+            PluginCommand cmd = getCommand(punishCmds[i]);
             if (cmd != null) {
                 cmd.setExecutor(punishExecutor);
                 cmd.setTabCompleter(tabCompleter);
@@ -99,18 +108,22 @@ public final class StaffCore extends JavaPlugin {
             vanishCmd.setTabCompleter(tabCompleter);
         }
 
-        // StaffCore Admin Command
+        // Admin Reload Command
         PluginCommand adminCmd = getCommand("staffcore");
         if (adminCmd != null) {
-            adminCmd.setExecutor((sender, command, label, args) -> {
-                if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
-                    reloadConfig();
-                    punishmentManager.loadData();
-                    sender.sendMessage(messageManager.getPrefixedMessage("messages.reload-success"));
+            adminCmd.setExecutor(new CommandExecutor() {
+                @Override
+                public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+                    if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+                        reloadConfig();
+                        punishmentManager.loadData();
+                        vanishManager.loadData();
+                        sender.sendMessage(messageManager.getPrefixedMessage("messages.reload-success"));
+                        return true;
+                    }
+                    sender.sendMessage(messageManager.color("&cUsage: /staffcore reload"));
                     return true;
                 }
-                sender.sendMessage(messageManager.color("&cUsage: /staffcore reload"));
-                return true;
             });
         }
     }

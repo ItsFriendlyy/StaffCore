@@ -1,6 +1,7 @@
 package com.github.staffcore.punishment;
 
 import com.github.staffcore.StaffCore;
+import com.github.staffcore.database.DatabaseManager;
 import com.github.staffcore.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
@@ -17,16 +18,26 @@ public class PunishmentManager {
     private final StaffCore plugin;
     private final File file;
     private FileConfiguration data;
+    private final DatabaseManager databaseManager;
 
     private final List<Punishment> punishments = new ArrayList<Punishment>();
 
     public PunishmentManager(StaffCore plugin) {
         this.plugin = plugin;
         this.file = new File(plugin.getDataFolder(), "punishments.yml");
+        this.databaseManager = new DatabaseManager(plugin);
         loadData();
     }
 
     public void loadData() {
+        // 1. If MySQL is enabled, load records from database
+        if (databaseManager != null && databaseManager.isEnabled()) {
+            punishments.clear();
+            punishments.addAll(databaseManager.loadAllPunishments());
+            return;
+        }
+
+        // 2. Local YAML fallback
         if (!file.exists()) {
             plugin.saveResource("punishments.yml", false);
         }
@@ -59,6 +70,10 @@ public class PunishmentManager {
     }
 
     public void saveData() {
+        if (databaseManager != null && databaseManager.isEnabled()) {
+            return; // Managed in MySQL
+        }
+
         data.set("punishments", null);
         for (Punishment p : punishments) {
             String key = "punishments." + p.getId().toString();
@@ -89,9 +104,14 @@ public class PunishmentManager {
         punishments.add(p);
         saveData();
 
+        // Sync to MySQL if enabled
+        if (databaseManager != null && databaseManager.isEnabled()) {
+            databaseManager.insertPunishment(p);
+        }
+
         broadcastPunishment(p, silent);
 
-        // If target is online and it's a ban, kick them
+        // Kick online players if banned
         if (type == PunishmentType.BAN || type == PunishmentType.TEMPBAN ||
             type == PunishmentType.IP_BAN || type == PunishmentType.TEMP_IP_BAN) {
             Player target = targetUUID != null ? Bukkit.getPlayer(targetUUID) : Bukkit.getPlayer(targetName);
@@ -107,7 +127,7 @@ public class PunishmentManager {
             }
         }
 
-        // If target is online and it's a warn, send warning message
+        // Warn target in chat if warned
         if (type == PunishmentType.WARN) {
             Player target = targetUUID != null ? Bukkit.getPlayer(targetUUID) : Bukkit.getPlayer(targetName);
             if (target != null && target.isOnline()) {
@@ -128,6 +148,9 @@ public class PunishmentManager {
                 (p.getType() == PunishmentType.BAN || p.getType() == PunishmentType.TEMPBAN)) {
                 p.setActive(false);
                 changed = true;
+                if (databaseManager != null && databaseManager.isEnabled()) {
+                    databaseManager.updateActiveStatus(p.getId(), false);
+                }
             }
         }
         if (changed) saveData();
@@ -141,6 +164,9 @@ public class PunishmentManager {
                 (p.getType() == PunishmentType.IP_BAN || p.getType() == PunishmentType.TEMP_IP_BAN)) {
                 p.setActive(false);
                 changed = true;
+                if (databaseManager != null && databaseManager.isEnabled()) {
+                    databaseManager.updateActiveStatus(p.getId(), false);
+                }
             }
         }
         if (changed) saveData();
@@ -154,6 +180,9 @@ public class PunishmentManager {
                 (p.getType() == PunishmentType.MUTE || p.getType() == PunishmentType.TEMP_MUTE)) {
                 p.setActive(false);
                 changed = true;
+                if (databaseManager != null && databaseManager.isEnabled()) {
+                    databaseManager.updateActiveStatus(p.getId(), false);
+                }
             }
         }
         if (changed) saveData();
@@ -167,6 +196,9 @@ public class PunishmentManager {
                 if (p.isExpired()) {
                     p.setActive(false);
                     saveData();
+                    if (databaseManager != null && databaseManager.isEnabled()) {
+                        databaseManager.updateActiveStatus(p.getId(), false);
+                    }
                     continue;
                 }
                 return p;
@@ -183,6 +215,9 @@ public class PunishmentManager {
                 if (p.isExpired()) {
                     p.setActive(false);
                     saveData();
+                    if (databaseManager != null && databaseManager.isEnabled()) {
+                        databaseManager.updateActiveStatus(p.getId(), false);
+                    }
                     continue;
                 }
                 return p;
@@ -198,6 +233,9 @@ public class PunishmentManager {
                 if (p.isExpired()) {
                     p.setActive(false);
                     saveData();
+                    if (databaseManager != null && databaseManager.isEnabled()) {
+                        databaseManager.updateActiveStatus(p.getId(), false);
+                    }
                     continue;
                 }
                 return p;
@@ -305,5 +343,9 @@ public class PunishmentManager {
 
             Bukkit.broadcastMessage(formatted);
         }
+    }
+
+    public DatabaseManager getDatabaseManager() {
+        return databaseManager;
     }
 }

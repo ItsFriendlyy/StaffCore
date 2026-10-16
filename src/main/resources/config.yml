@@ -130,3 +130,16 @@ broadcasts:
     mute: "&8[&cSilent&8] &7%staff% permanently muted &e%target% &7for: &f%reason%"
     tempmute: "&8[&cSilent&8] &7%staff% temp-muted &e%target% &7for &e%duration% &7for: &f%reason%"
     warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%"
+# ========================================================
+#            MySQL Network Database Settings
+#  Connect multiple servers to the same database to sync bans
+# ========================================================
+database:
+  enabled: false
+  host: "localhost"
+  port: 3306
+  database: "staffcore"
+  username: "root"
+  password: "password"
+  use-ssl: false
+  table-prefix: "staffcore_"
