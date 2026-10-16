@@ -3,6 +3,7 @@ package com.github.staffcore.listeners;
 import com.github.staffcore.StaffCore;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -19,13 +20,21 @@ public class VanishListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onJoin(PlayerJoinEvent event) {
+        // Silent join if player logged in while vanished
+        if (plugin.getVanishManager().isVanished(event.getPlayer().getUniqueId())) {
+            event.setJoinMessage(null);
+        }
         plugin.getVanishManager().onPlayerJoin(event.getPlayer());
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onQuit(PlayerQuitEvent event) {
+        // Silent quit if player disconnected while vanished
+        if (plugin.getVanishManager().isVanished(event.getPlayer().getUniqueId())) {
+            event.setQuitMessage(null);
+        }
         plugin.getVanishManager().onPlayerQuit(event.getPlayer());
     }
 
