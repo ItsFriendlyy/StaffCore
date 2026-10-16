@@ -1,0 +1,132 @@
+# ========================================================
+#            StaffCore Configuration File
+#   Customize all messages, titles, formats, & settings
+# ========================================================
+
+prefix: "&8[&cStaffCore&8] &r"
+
+messages:
+  no-permission: "&cYou do not have permission to execute this command!"
+  player-not-found: "&cPlayer &e%target% &cwas not found or has never joined!"
+  cannot-punish-self: "&cYou cannot punish yourself!"
+  cannot-punish-exempt: "&cYou cannot punish &e%target% &cbecause they have bypass permissions!"
+  cannot-freeze-exempt: "&cYou cannot freeze &e%target% &cbecause they have bypass permissions!"
+  invalid-duration: "&cInvalid duration format! Example: 10m, 2h, 1d, 7d"
+  unban-success: "&aSuccessfully unbanned &e%target%&a."
+  not-banned: "&cPlayer &e%target% &cis not banned!"
+  unbanip-success: "&aSuccessfully unbanned IP &e%ip%&a."
+  ip-not-banned: "&cIP address &e%ip% &cis not banned!"
+  unmute-success: "&aSuccessfully unmuted &e%target%&a."
+  not-muted: "&cPlayer &e%target% &cis not muted!"
+  reload-success: "&aStaffCore configuration reloaded successfully."
+  command-blocked-frozen: "&cYou cannot execute commands while frozen!"
+  action-blocked-frozen: "&cYou cannot interact or break blocks while frozen!"
+
+# Screen messages shown to kicked / banned players
+screens:
+  permanent-ban:
+    - "&c&lYOU ARE PERMANENTLY BANNED!"
+    - ""
+    - "&7Reason: &f%reason%"
+    - "&7Banned by: &f%staff%"
+    - ""
+    - "&7Appeal your ban on our Discord: &bdiscord.gg/yourserver"
+
+  temporary-ban:
+    - "&c&lYOU ARE TEMPORARILY BANNED!"
+    - ""
+    - "&7Reason: &f%reason%"
+    - "&7Expires in: &e%remaining%"
+    - "&7Banned by: &f%staff%"
+    - ""
+    - "&7Appeal your ban on our Discord: &bdiscord.gg/yourserver"
+
+  permanent-ipban:
+    - "&c&lYOUR IP ADDRESS IS PERMANENTLY BANNED!"
+    - ""
+    - "&7Reason: &f%reason%"
+    - "&7Banned by: &f%staff%"
+    - ""
+    - "&7Appeal on our Discord: &bdiscord.gg/yourserver"
+
+  temporary-ipban:
+    - "&c&lYOUR IP ADDRESS IS TEMPORARILY BANNED!"
+    - ""
+    - "&7Reason: &f%reason%"
+    - "&7Expires in: &e%remaining%"
+    - "&7Banned by: &f%staff%"
+
+# Mute chat notifications
+mute:
+  permanent-chat:
+    - "&c&m--------------------------------------------------"
+    - "&cYou are permanently muted and cannot speak!"
+    - "&7Reason: &f%reason%"
+    - "&c&m--------------------------------------------------"
+  temporary-chat:
+    - "&c&m--------------------------------------------------"
+    - "&cYou are temporarily muted!"
+    - "&7Reason: &f%reason%"
+    - "&7Remaining time: &e%remaining%"
+    - "&c&m--------------------------------------------------"
+
+# Warning messages
+warning:
+  received:
+    - "&6&m--------------------------------------------------"
+    - "&6&lWARNING RECEIVED!"
+    - "&7You have been warned by &f%staff%&7!"
+    - "&7Reason: &f%reason%"
+    - "&7Please follow the server rules to avoid further punishment."
+    - "&6&m--------------------------------------------------"
+
+# Freeze system settings
+freeze:
+  title: "&c&lFROZEN"
+  subtitle: "&eYou are frozen and being inspected by a staff member"
+  chat-message:
+    - "&c&l================================================"
+    - "&c&lYOU HAVE BEEN FROZEN BY A STAFF MEMBER!"
+    - "&eDo NOT log out or close your game."
+    - "&eDisconnecting while frozen will result in a permanent ban."
+    - "&ePlease follow the instructions from the staff member in chat."
+    - "&c&l================================================"
+  unfrozen-target: "&aYou have been unfrozen by a staff member. Thank you for your cooperation!"
+  frozen-staff-notify: "&aYou froze &e%target%&a."
+  unfrozen-staff-notify: "&aYou unfroze &e%target%&a."
+  disconnect-alert: "&4&l[STAFF ALERT] &cPlayer &e%target% &cdisconnected while frozen!"
+
+# Staff Chat settings
+staffchat:
+  format: "&8[&cStaffChat&8] &e%player%: &f%message%"
+  switched-staff: "&aEntered Staff Chat. All your messages will be sent to staff."
+  switched-global: "&aReturned to Global Chat. Everyone can see your messages."
+
+# Vanish settings
+vanish:
+  enabled: "&aYou are now vanished! (Hidden from players, tab list, &amp; server counter)"
+  disabled: "&cYou are no longer vanished! You are now visible to everyone."
+  staff-notify-vanish: "&8[&bVanish&8] &e%player% &7is now vanished."
+  staff-notify-unvanish: "&8[&bVanish&8] &e%player% &7is now visible."
+
+# Broadcast announcements for punishments
+broadcasts:
+  # Public broadcast sent to everyone when -s is NOT used
+  public:
+    ban: "&c&lPUNISH &8» &f%target% &7was permanently banned by &f%staff% &7for: &e%reason%"
+    tempban: "&c&lPUNISH &8» &f%target% &7was banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    ipban: "&c&lPUNISH &8» &f%target% &7was permanently IP-banned by &f%staff% &7for: &e%reason%"
+    tempipban: "&c&lPUNISH &8» &f%target% &7was IP-banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    mute: "&c&lPUNISH &8» &f%target% &7was permanently muted by &f%staff% &7for: &e%reason%"
+    tempmute: "&c&lPUNISH &8» &f%target% &7was muted for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    warn: "&6&lWARNING &8» &f%target% &7was warned by &f%staff% &7for: &e%reason%"
+
+  # Silent broadcast sent ONLY to staff (staffcore.broadcast.silent) when -s IS used
+  silent:
+    ban: "&8[&cSilent&8] &7%staff% permanently banned &e%target% &7for: &f%reason%"
+    tempban: "&8[&cSilent&8] &7%staff% temp-banned &e%target% &7for &e%duration% &7for: &f%reason%"
+    ipban: "&8[&cSilent&8] &7%staff% permanently IP-banned &e%target% &7for: &f%reason%"
+    tempipban: "&8[&cSilent&8] &7%staff% temp IP-banned &e%target% &7for &e%duration% &7for: &f%reason%"
+    mute: "&8[&cSilent&8] &7%staff% permanently muted &e%target% &7for: &f%reason%"
+    tempmute: "&8[&cSilent&8] &7%staff% temp-muted &e%target% &7for &e%duration% &7for: &f%reason%"
+    warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%"

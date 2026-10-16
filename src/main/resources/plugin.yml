@@ -1,0 +1,145 @@
+name: StaffCore
+version: 1.0.0
+main: com.github.staffcore.StaffCore
+author: StaffCoreDev
+description: Complete Management & Moderation Plugin with GUI, Vanish, Freeze, and Punishment System.
+
+commands:
+  ban:
+    description: Permanently bans a player.
+    usage: /ban <player> [reason] [-s]
+    permission: staffcore.command.ban
+  tempban:
+    description: Temporarily bans a player for a specific duration.
+    usage: /tempban <player> <duration> [reason] [-s]
+    permission: staffcore.command.tempban
+  ipban:
+    description: Permanently IP bans a player.
+    usage: /ipban <player|ip> [reason] [-s]
+    permission: staffcore.command.ipban
+  tempipban:
+    description: Temporarily IP bans a player.
+    usage: /tempipban <player|ip> <duration> [reason] [-s]
+    permission: staffcore.command.tempipban
+  unban:
+    description: Unbans a banned player.
+    usage: /unban <player>
+    permission: staffcore.command.unban
+  unbanip:
+    description: Unbans a banned IP address.
+    usage: /unbanip <ip>
+    permission: staffcore.command.unbanip
+  mute:
+    description: Permanently mutes a player.
+    usage: /mute <player> [reason] [-s]
+    permission: staffcore.command.mute
+  tempmute:
+    description: Temporarily mutes a player.
+    usage: /tempmute <player> <duration> [reason] [-s]
+    permission: staffcore.command.tempmute
+  unmute:
+    description: Unmutes a muted player.
+    usage: /unmute <player>
+    permission: staffcore.command.unmute
+  warn:
+    description: Warns a player.
+    usage: /warn <player> [reason] [-s]
+    permission: staffcore.command.warn
+  freeze:
+    description: Toggles freeze on a player for staff inspection.
+    usage: /freeze <player>
+    permission: staffcore.command.freeze
+  check:
+    description: Opens an inspection GUI showing player stats and punishment history.
+    usage: /check <player>
+    permission: staffcore.command.check
+  chat:
+    description: Switches between staff chat and global chat.
+    usage: /chat <staff|all>
+    permission: staffcore.command.chat
+  vanish:
+    description: Toggles complete invisibility and hides you from tab list and player counter.
+    aliases: [v]
+    usage: /vanish
+    permission: staffcore.command.vanish
+  staffcore:
+    description: Reloads plugin configuration.
+    usage: /staffcore reload
+    permission: staffcore.admin
+
+permissions:
+  staffcore.command.ban:
+    description: Allows banning players.
+    default: op
+  staffcore.command.tempban:
+    description: Allows tempbanning players.
+    default: op
+  staffcore.command.ipban:
+    description: Allows IP banning players.
+    default: op
+  staffcore.command.tempipban:
+    description: Allows temp IP banning players.
+    default: op
+  staffcore.command.unban:
+    description: Allows unbanning players.
+    default: op
+  staffcore.command.unbanip:
+    description: Allows unbanning IP addresses.
+    default: op
+  staffcore.command.mute:
+    description: Allows muting players.
+    default: op
+  staffcore.command.tempmute:
+    description: Allows temp-muting players.
+    default: op
+  staffcore.command.unmute:
+    description: Allows unmuting players.
+    default: op
+  staffcore.command.warn:
+    description: Allows warning players.
+    default: op
+  staffcore.command.freeze:
+    description: Allows freezing players.
+    default: op
+  staffcore.command.check:
+    description: Allows opening the /check punishment & stats GUI.
+    default: op
+  staffcore.command.chat:
+    description: Allows toggling staff chat.
+    default: op
+  staffcore.command.vanish:
+    description: Allows toggling vanish.
+    default: op
+  staffcore.admin:
+    description: Full administration permissions.
+    default: op
+  staffcore.staff:
+    description: General staff permission (receives staff notifications).
+    default: op
+  staffcore.staffchat:
+    description: Receives and sends messages in staff chat.
+    default: op
+  staffcore.broadcast.silent:
+    description: Receives silent (-s) punishment broadcast announcements.
+    default: op
+  staffcore.vanish.see:
+    description: Allows seeing vanished staff members in-game and tab list.
+    default: op
+  staffcore.vanish.notify:
+    description: Receives vanish toggle notification alerts.
+    default: op
+  staffcore.freeze.alerts:
+    description: Receives alerts if a frozen player disconnects.
+    default: op
+  staffcore.bypass.ban:
+    description: Protects a player from being banned or temp-banned.
+    default: false
+  staffcore.bypass.mute:
+    description: Protects a player from being muted or temp-muted.
+    default: false
+  staffcore.bypass.freeze:
+    description: Protects a player from being frozen.
+    default: false
+  staffcore.bypass.warn:
+    description: Protects a player from being warned.
+    default: false
