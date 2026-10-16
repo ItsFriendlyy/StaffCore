@@ -3,26 +3,62 @@ package com.github.staffcore.vanish;
 import com.github.staffcore.StaffCore;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class VanishManager {
 
     private final StaffCore plugin;
     private final Set<UUID> vanishedPlayers = ConcurrentHashMap.newKeySet();
+    private final File dataFile;
+    private FileConfiguration dataConfig;
     private BukkitTask actionBarTask;
 
     public VanishManager(StaffCore plugin) {
         this.plugin = plugin;
+        this.dataFile = new File(plugin.getDataFolder(), "vanished.yml");
+        loadData();
         startActionBarTask();
+    }
+
+    public void loadData() {
+        if (!dataFile.exists()) {
+            try {
+                dataFile.createNewFile();
+            } catch (IOException ignored) {}
+        }
+        dataConfig = YamlConfiguration.loadConfiguration(dataFile);
+        vanishedPlayers.clear();
+        List<String> list = dataConfig.getStringList("vanished");
+        if (list != null) {
+            for (String s : list) {
+                try {
+                    vanishedPlayers.add(UUID.fromString(s));
+                } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    public void saveData() {
+        List<String> list = new ArrayList<String>();
+        for (UUID uuid : vanishedPlayers) {
+            list.add(uuid.toString());
+        }
+        dataConfig.set("vanished", list);
+        try {
+            dataConfig.save(dataFile);
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not save vanished.yml: " + e.getMessage());
+        }
     }
 
     public boolean isVanished(UUID uuid) {
@@ -30,7 +66,14 @@ public class VanishManager {
     }
 
     public int getVanishedCount() {
-        return vanishedPlayers.size();
+        int count = 0;
+        for (UUID uuid : vanishedPlayers) {
+            Player p = Bukkit.getPlayer(uuid);
+            if (p != null && p.isOnline()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public void toggleVanish(Player player) {
@@ -41,14 +84,12 @@ public class VanishManager {
         UUID uuid = player.getUniqueId();
         if (vanish) {
             vanishedPlayers.add(uuid);
+            saveData();
 
-            // 1. Add [v] in tab list and dim the name
+            // Set dimmed [v] tag in tab list
             player.setPlayerListName(ChatColor.GRAY + "[v] " + ChatColor.ITALIC + player.getName());
 
-            // 2. Add invisibility so staff members see a translucent ghost effect
-            player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 0, false, false));
-
-            // 3. Hide from players without permission, keep visible for staff
+            // Hide from regular players, keep visible for staff
             updateVisibility(player);
 
             player.sendMessage(plugin.getMessageManager().color(
@@ -60,12 +101,10 @@ public class VanishManager {
             notifyStaff(staffAlert, player);
         } else {
             vanishedPlayers.remove(uuid);
+            saveData();
 
-            // Restore normal tab list name
+            // Restore original name in tab list
             player.setPlayerListName(player.getName());
-
-            // Remove ghost invisibility
-            player.removePotionEffect(PotionEffectType.INVISIBILITY);
 
             // Show to all players
             showPlayerToAll(player);
@@ -98,24 +137,34 @@ public class VanishManager {
         }
     }
 
-    public void onPlayerJoin(Player joiningPlayer) {
+    public void onPlayerJoin(Player player) {
+        // If this joining player was saved as vanished, re-apply vanish automatically
+        if (isVanished(player.getUniqueId())) {
+            player.setPlayerListName(ChatColor.GRAY + "[v] " + ChatColor.ITALIC + player.getName());
+            updateVisibility(player);
+            player.sendMessage(plugin.getMessageManager().color("&aYou logged in while vanished. (Visible only to staff)"));
+
+            String alert = plugin.getMessageManager().color("&8[&bVanish&8] &e" + player.getName() + " &7joined while vanished.");
+            notifyStaff(alert, player);
+        }
+
+        // Hide other currently vanished players from this new player (unless they have permission)
         for (UUID uuid : vanishedPlayers) {
             Player vanished = Bukkit.getPlayer(uuid);
-            if (vanished != null && vanished.isOnline()) {
-                if (joiningPlayer.isOp() || joiningPlayer.hasPermission("staffcore.vanish.see")) {
-                    show(joiningPlayer, vanished);
+            if (vanished != null && vanished.isOnline() && !vanished.equals(player)) {
+                if (player.isOp() || player.hasPermission("staffcore.vanish.see")) {
+                    show(player, vanished);
                 } else {
-                    hide(joiningPlayer, vanished);
+                    hide(player, vanished);
                 }
             }
         }
     }
 
     public void onPlayerQuit(Player player) {
-        vanishedPlayers.remove(player.getUniqueId());
+        // We do NOT remove from vanishedPlayers so they stay vanished when relogging!
     }
 
-    // Displays continuous green message below the screen
     private void startActionBarTask() {
         actionBarTask = new BukkitRunnable() {
             @Override
@@ -131,14 +180,11 @@ public class VanishManager {
         }.runTaskTimer(plugin, 10L, 20L);
     }
 
-    // Universal action bar sender (1.8 to 1.20+)
     private void sendActionBar(Player player, String message) {
         try {
-            // Modern Spigot / Paper 1.11+
             Method m = player.getClass().getMethod("sendActionBar", String.class);
             m.invoke(player, message);
         } catch (Exception e1) {
-            // 1.8 NMS packet fallback
             try {
                 String nms = Bukkit.getServer().getClass().getPackage().getName().split("\\.")[3];
                 Class<?> craftPlayerClass = Class.forName("org.bukkit.craftbukkit." + nms + ".entity.CraftPlayer");
@@ -160,7 +206,6 @@ public class VanishManager {
         }
     }
 
-    // Universal hidePlayer (1.8 vs 1.12+)
     private void hide(Player viewer, Player target) {
         try {
             Method m = viewer.getClass().getMethod("hidePlayer", org.bukkit.plugin.Plugin.class, Player.class);
@@ -181,7 +226,7 @@ public class VanishManager {
 
     private void notifyStaff(String message, Player exempt) {
         for (Player staff : Bukkit.getOnlinePlayers()) {
-            if (staff.hasPermission("staffcore.vanish.notify") && !staff.equals(exempt)) {
+            if ((staff.isOp() || staff.hasPermission("staffcore.vanish.notify")) && !staff.equals(exempt)) {
                 staff.sendMessage(message);
             }
         }
@@ -191,14 +236,6 @@ public class VanishManager {
         if (actionBarTask != null) {
             actionBarTask.cancel();
         }
-        for (UUID uuid : vanishedPlayers) {
-            Player p = Bukkit.getPlayer(uuid);
-            if (p != null && p.isOnline()) {
-                p.setPlayerListName(p.getName());
-                p.removePotionEffect(PotionEffectType.INVISIBILITY);
-                showPlayerToAll(p);
-            }
-        }
-        vanishedPlayers.clear();
+        saveData();
     }
 }
