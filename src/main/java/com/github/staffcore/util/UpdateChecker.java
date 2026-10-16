@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 
 public class UpdateChecker {
@@ -34,7 +35,7 @@ public class UpdateChecker {
             public void run() {
                 try {
                     String apiUrl = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/releases/latest";
-                    URL url = new URL(apiUrl);
+                    URL url = URI.create(apiUrl).toURL();
                     HttpURLConnection con = (HttpURLConnection) url.openConnection();
                     con.setRequestMethod("GET");
                     con.setRequestProperty("User-Agent", "StaffCore-UpdateChecker");
@@ -50,7 +51,6 @@ public class UpdateChecker {
                         }
                         in.close();
 
-                        // Parse "tag_name": "..." without external libraries
                         String body = response.toString();
                         int tagIndex = body.indexOf("\"tag_name\":");
                         if (tagIndex != -1) {
