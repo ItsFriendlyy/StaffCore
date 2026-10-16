@@ -6,7 +6,7 @@
 
     <groupId>com.github</groupId>
     <artifactId>StaffCore</artifactId>
-    <version>1.0.0-Universal</version>
+    <version>1.0.1</version>
     <packaging>jar</packaging>
 
     <name>StaffCore</name>
