@@ -6,6 +6,7 @@
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/FreezeListener.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/DatabaseManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/PunishmentListener.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/util/UpdateChecker.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/vanish/VanishManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/config/MessageManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/commands/VanishCommand.java

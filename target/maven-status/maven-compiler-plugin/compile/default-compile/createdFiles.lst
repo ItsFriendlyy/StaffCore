@@ -11,6 +11,7 @@ com/github/staffcore/listeners/PunishmentListener.class
 com/github/staffcore/commands/PunishCommands$ParsedReason.class
 com/github/staffcore/database/DatabaseManager.class
 com/github/staffcore/StaffCore$1.class
+com/github/staffcore/util/UpdateChecker$1.class
 com/github/staffcore/punishment/PunishmentType.class
 com/github/staffcore/punishment/Punishment.class
 com/github/staffcore/freeze/FreezeManager$1.class
@@ -22,5 +23,6 @@ com/github/staffcore/listeners/FreezeListener.class
 com/github/staffcore/commands/PunishCommands.class
 com/github/staffcore/staffchat/StaffChatManager.class
 com/github/staffcore/commands/VanishCommand.class
+com/github/staffcore/util/UpdateChecker.class
 com/github/staffcore/vanish/VanishManager.class
 com/github/staffcore/punishment/PunishmentManager.class

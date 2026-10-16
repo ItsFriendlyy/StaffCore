@@ -9,6 +9,7 @@ import com.github.staffcore.listeners.PunishmentListener;
 import com.github.staffcore.listeners.VanishListener;
 import com.github.staffcore.punishment.PunishmentManager;
 import com.github.staffcore.staffchat.StaffChatManager;
+import com.github.staffcore.util.UpdateChecker;
 import com.github.staffcore.vanish.VanishManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -24,27 +25,32 @@ public final class StaffCore extends JavaPlugin {
     private FreezeManager freezeManager;
     private StaffChatManager staffChatManager;
     private VanishManager vanishManager;
+    private UpdateChecker updateChecker;
 
     @Override
     public void onEnable() {
         // Save default config.yml
         saveDefaultConfig();
 
-        // Initialize Managers
+        // 1. Initialize GitHub Update Checker
+        this.updateChecker = new UpdateChecker(this, "zainalkhalili78-crypto", "Friendly-s-Management-");
+        this.updateChecker.checkForUpdates();
+
+        // 2. Initialize Managers
         this.messageManager = new MessageManager(this);
         this.punishmentManager = new PunishmentManager(this);
         this.freezeManager = new FreezeManager(this);
         this.staffChatManager = new StaffChatManager(this);
         this.vanishManager = new VanishManager(this);
 
-        // Register Event Listeners
+        // 3. Register Event Listeners
         PluginManager pm = getServer().getPluginManager();
         pm.registerEvents(new PunishmentListener(this), this);
         pm.registerEvents(new FreezeListener(this), this);
         pm.registerEvents(new VanishListener(this), this);
         pm.registerEvents(new GuiListener(this), this);
 
-        // Register Commands & Tab Completion
+        // 4. Register Commands & Tab Completers
         registerCommands();
 
         getLogger().info("StaffCore has been successfully enabled! Ready for moderation.");
@@ -118,6 +124,9 @@ public final class StaffCore extends JavaPlugin {
                         reloadConfig();
                         punishmentManager.loadData();
                         vanishManager.loadData();
+                        if (updateChecker != null) {
+                            updateChecker.checkForUpdates();
+                        }
                         sender.sendMessage(messageManager.getPrefixedMessage("messages.reload-success"));
                         return true;
                     }
@@ -133,4 +142,5 @@ public final class StaffCore extends JavaPlugin {
     public FreezeManager getFreezeManager() { return freezeManager; }
     public StaffChatManager getStaffChatManager() { return staffChatManager; }
     public VanishManager getVanishManager() { return vanishManager; }
+    public UpdateChecker getUpdateChecker() { return updateChecker; }
 }

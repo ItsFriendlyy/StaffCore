@@ -143,3 +143,9 @@ database:
   password: "password"
   use-ssl: false
   table-prefix: "staffcore_"
+  # ========================================================
+#                  Update Checker
+# ========================================================
+update-checker:
+  enabled: true
+  notify-staff-on-join: true

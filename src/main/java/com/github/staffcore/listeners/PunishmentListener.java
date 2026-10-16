@@ -11,6 +11,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 
 import java.net.InetAddress;
 import java.util.List;
@@ -26,7 +27,7 @@ public class PunishmentListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPreLogin(AsyncPlayerPreLoginEvent event) {
-        // If MySQL is enabled, refresh data live from the shared database
+        // If MySQL is enabled, refresh live from the shared database
         if (plugin.getPunishmentManager().getDatabaseManager() != null &&
             plugin.getPunishmentManager().getDatabaseManager().isEnabled()) {
             plugin.getPunishmentManager().loadData();
@@ -62,7 +63,7 @@ public class PunishmentListener implements Listener {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
-        // 1. Check mute status (OPs and players with bypass permission are exempt)
+        // 1. Check mute status (OPs and bypass permission are exempt)
         if (!player.isOp() && !player.hasPermission("staffcore.bypass.mute")) {
             Punishment mute = plugin.getPunishmentManager().getActiveMute(uuid);
             if (mute != null) {
@@ -81,10 +82,18 @@ public class PunishmentListener implements Listener {
             }
         }
 
-        // 2. Route message to staff channel if player is in staff chat mode
+        // 2. Route message to staff channel if in staff chat mode
         if (plugin.getStaffChatManager().isInStaffChat(uuid)) {
             event.setCancelled(true);
             plugin.getStaffChatManager().sendStaffMessage(player, event.getMessage());
+        }
+    }
+
+    @EventHandler
+    public void onStaffJoin(PlayerJoinEvent event) {
+        // Notify staff and OPs when a new GitHub release is available
+        if (plugin.getUpdateChecker() != null) {
+            plugin.getUpdateChecker().notifyPlayer(event.getPlayer());
         }
     }
 }
