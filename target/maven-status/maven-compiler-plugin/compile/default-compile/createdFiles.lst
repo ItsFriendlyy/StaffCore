@@ -15,6 +15,7 @@ com/github/staffcore/freeze/FreezeManager$1.class
 com/github/staffcore/commands/ChatCommand.class
 com/github/staffcore/commands/StaffTabCompleter.class
 com/github/staffcore/util/TimeUtil.class
+com/github/staffcore/vanish/VanishManager$1.class
 com/github/staffcore/listeners/FreezeListener.class
 com/github/staffcore/commands/PunishCommands.class
 com/github/staffcore/staffchat/StaffChatManager.class
