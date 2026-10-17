@@ -6,6 +6,7 @@ import com.github.staffcore.freeze.FreezeManager;
 import com.github.staffcore.listeners.FreezeListener;
 import com.github.staffcore.listeners.GuiListener;
 import com.github.staffcore.listeners.PunishmentListener;
+import com.github.staffcore.listeners.UtilityListener;
 import com.github.staffcore.listeners.VanishListener;
 import com.github.staffcore.punishment.PunishmentManager;
 import com.github.staffcore.staffchat.StaffChatManager;
@@ -32,48 +33,29 @@ public final class StaffCore extends JavaPlugin {
         // Save default config.yml
         saveDefaultConfig();
 
-        // 1. Initialize GitHub Update Checker
-        this.updateChecker = new UpdateChecker(this, "zainalkhalili78-crypto", "Friendly-s-Management-");
+        // 1. Register BungeeCord Messaging Channel
+        getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
+
+        // 2. Initialize GitHub Update Checker
+        this.updateChecker = new UpdateChecker(this, "ItsFriendlyy", "StaffCore");
         this.updateChecker.checkForUpdates();
 
-        // 2. Initialize Managers
+        // 3. Initialize Managers
         this.messageManager = new MessageManager(this);
         this.punishmentManager = new PunishmentManager(this);
         this.freezeManager = new FreezeManager(this);
         this.staffChatManager = new StaffChatManager(this);
         this.vanishManager = new VanishManager(this);
 
-        // 3. Register Event Listeners
+        // 4. Register Event Listeners
         PluginManager pm = getServer().getPluginManager();
         pm.registerEvents(new PunishmentListener(this), this);
         pm.registerEvents(new FreezeListener(this), this);
         pm.registerEvents(new VanishListener(this), this);
         pm.registerEvents(new GuiListener(this), this);
+        pm.registerEvents(new UtilityListener(), this);
 
-        // 4. Register Commands & Tab Completers
-        registerCommands();
-
-        getLogger().info("StaffCore has been successfully enabled! Ready for moderation.");
-    }
-
-    @Override
-    public void onDisable() {
-        if (freezeManager != null) {
-            freezeManager.stop();
-        }
-        if (vanishManager != null) {
-            vanishManager.stop();
-        }
-        if (punishmentManager != null) {
-            punishmentManager.saveData();
-            if (punishmentManager.getDatabaseManager() != null) {
-                punishmentManager.getDatabaseManager().close();
-            }
-        }
-        getLogger().info("StaffCore has been successfully disabled.");
-    }
-
-    private void registerCommands() {
+        // 5. Register Punishment Commands
         PunishCommands punishExecutor = new PunishCommands(this);
         StaffTabCompleter tabCompleter = new StaffTabCompleter();
 
@@ -114,6 +96,17 @@ public final class StaffCore extends JavaPlugin {
             vanishCmd.setTabCompleter(tabCompleter);
         }
 
+        // 6. Register Utility & Access Commands
+        UtilityCommands utilExecutor = new UtilityCommands(this);
+        String[] utilCmds = new String[]{"gmc", "gms", "gma", "gmsp", "fly", "speed", "invincible", "tphere", "tpall", "invsee", "enchant", "sendserver"};
+        for (int i = 0; i < utilCmds.length; i++) {
+            PluginCommand cmd = getCommand(utilCmds[i]);
+            if (cmd != null) {
+                cmd.setExecutor(utilExecutor);
+                cmd.setTabCompleter(tabCompleter);
+            }
+        }
+
         // Admin Reload Command
         PluginCommand adminCmd = getCommand("staffcore");
         if (adminCmd != null) {
@@ -135,6 +128,25 @@ public final class StaffCore extends JavaPlugin {
                 }
             });
         }
+
+        getLogger().info("StaffCore has been successfully enabled! Ready for moderation.");
+    }
+
+    @Override
+    public void onDisable() {
+        if (freezeManager != null) {
+            freezeManager.stop();
+        }
+        if (vanishManager != null) {
+            vanishManager.stop();
+        }
+        if (punishmentManager != null) {
+            punishmentManager.saveData();
+            if (punishmentManager.getDatabaseManager() != null) {
+                punishmentManager.getDatabaseManager().close();
+            }
+        }
+        getLogger().info("StaffCore has been successfully disabled.");
     }
 
     public MessageManager getMessageManager() { return messageManager; }

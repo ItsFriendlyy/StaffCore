@@ -21,8 +21,10 @@ com/github/staffcore/util/TimeUtil.class
 com/github/staffcore/vanish/VanishManager$1.class
 com/github/staffcore/listeners/FreezeListener.class
 com/github/staffcore/commands/PunishCommands.class
+com/github/staffcore/commands/UtilityCommands.class
 com/github/staffcore/staffchat/StaffChatManager.class
 com/github/staffcore/commands/VanishCommand.class
+com/github/staffcore/listeners/UtilityListener.class
 com/github/staffcore/util/UpdateChecker.class
 com/github/staffcore/vanish/VanishManager.class
 com/github/staffcore/punishment/PunishmentManager.class

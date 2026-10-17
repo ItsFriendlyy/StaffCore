@@ -1,8 +1,8 @@
 name: StaffCore
-version: 1.0.1
+version: 1.0.2
 main: com.github.staffcore.StaffCore
 author: StaffCoreDev
-description: Complete Management & Moderation Plugin with GUI, Vanish, Freeze, and Punishment System.
+description: Complete Management & Moderation Plugin with GUI, Vanish, Freeze, Punishment System, and Staff Utilities.
 
 commands:
   ban:
@@ -67,79 +67,123 @@ commands:
     usage: /staffcore reload
     permission: staffcore.admin
 
+  # Utility & Access Commands
+  gmc:
+    description: Sets gamemode to Creative.
+    usage: /gmc [player]
+    permission: staffcore.command.gamemode
+  gms:
+    description: Sets gamemode to Survival.
+    usage: /gms [player]
+    permission: staffcore.command.gamemode
+  gma:
+    description: Sets gamemode to Adventure.
+    usage: /gma [player]
+    permission: staffcore.command.gamemode
+  gmsp:
+    description: Sets gamemode to Spectator.
+    usage: /gmsp [player]
+    permission: staffcore.command.gamemode
+  fly:
+    description: Toggles flight without changing gamemode.
+    usage: /fly [player]
+    permission: staffcore.command.fly
+  speed:
+    description: Changes fly and walk speed from 1 to 10.
+    usage: /speed <1-10> [player]
+    permission: staffcore.command.speed
+  invincible:
+    description: Makes a player invulnerable to all damage.
+    aliases: [god]
+    usage: /invincible [player]
+    permission: staffcore.command.invincible
+  tphere:
+    description: Teleports a player to your current location.
+    usage: /tphere <player>
+    permission: staffcore.command.teleport
+  tpall:
+    description: Teleports all online players to you, a player, or coordinates.
+    usage: /tpall [player | x y z]
+    permission: staffcore.command.teleport
+  invsee:
+    description: Inspects a player inventory including armor and off-hand.
+    usage: /invsee <player>
+    permission: staffcore.command.invsee
+  enchant:
+    description: Enchants the held item bypassing normal level limits (up to 32767).
+    usage: /enchant <enchantment> <level>
+    permission: staffcore.command.enchant
+  sendserver:
+    description: BungeeCord command to send a player to another server.
+    usage: /sendserver <player> <server>
+    permission: staffcore.command.bungee
+
 permissions:
   staffcore.command.ban:
-    description: Allows banning players.
     default: op
   staffcore.command.tempban:
-    description: Allows tempbanning players.
     default: op
   staffcore.command.ipban:
-    description: Allows IP banning players.
     default: op
   staffcore.command.tempipban:
-    description: Allows temp IP banning players.
     default: op
   staffcore.command.unban:
-    description: Allows unbanning players.
     default: op
   staffcore.command.unbanip:
-    description: Allows unbanning IP addresses.
     default: op
   staffcore.command.mute:
-    description: Allows muting players.
     default: op
   staffcore.command.tempmute:
-    description: Allows temp-muting players.
     default: op
   staffcore.command.unmute:
-    description: Allows unmuting players.
     default: op
   staffcore.command.warn:
-    description: Allows warning players.
     default: op
   staffcore.command.freeze:
-    description: Allows freezing players.
     default: op
   staffcore.command.check:
-    description: Allows opening the /check punishment & stats GUI.
     default: op
   staffcore.command.chat:
-    description: Allows toggling staff chat.
     default: op
   staffcore.command.vanish:
-    description: Allows toggling vanish.
+    default: op
+  staffcore.command.gamemode:
+    default: op
+  staffcore.command.fly:
+    default: op
+  staffcore.command.speed:
+    default: op
+  staffcore.command.invincible:
+    default: op
+  staffcore.command.teleport:
+    default: op
+  staffcore.command.invsee:
+    default: op
+  staffcore.command.enchant:
+    default: op
+  staffcore.command.bungee:
     default: op
   staffcore.admin:
-    description: Full administration permissions.
     default: op
   staffcore.staff:
-    description: General staff permission (receives staff notifications).
     default: op
   staffcore.staffchat:
-    description: Receives and sends messages in staff chat.
     default: op
   staffcore.broadcast.silent:
-    description: Receives silent (-s) punishment broadcast announcements.
     default: op
   staffcore.vanish.see:
-    description: Allows seeing vanished staff members in-game and tab list.
     default: op
   staffcore.vanish.notify:
-    description: Receives vanish toggle notification alerts.
     default: op
   staffcore.freeze.alerts:
-    description: Receives alerts if a frozen player disconnects.
+    default: op
+  staffcore.check.ip:
     default: op
   staffcore.bypass.ban:
-    description: Protects a player from being banned or temp-banned.
-    default: false
+    default: op
   staffcore.bypass.mute:
-    description: Protects a player from being muted or temp-muted.
-    default: false
+    default: op
   staffcore.bypass.freeze:
-    description: Protects a player from being frozen.
-    default: false
+    default: op
   staffcore.bypass.warn:
-    description: Protects a player from being warned.
-    default: false
+    default: op
