@@ -2,14 +2,22 @@
 <project name="maven-antrun-" default="main">
   <target name="main">
     <echo message="====================================================" />
-    <echo message="Packaging StaffCore Legacy and Modern Jars..." />
+    <echo message="Building Clean StaffCore Legacy &amp; Modern Jars..." />
     <echo message="====================================================" />
-    <copy file="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2.jar" tofile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Legacy.jar" overwrite="true" />
-    <copy file="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2.jar" tofile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Modern.jar" overwrite="true" />
-    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Modern.jar" update="true">
+    <delete file="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2.jar" quiet="true" />
+    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Legacy.jar">
+      <fileset dir="/workspaces/Friendly-s-Management-/target/classes">
+        <exclude name="plugin*.yml" />
+      </fileset>
+      <zipfileset file="/workspaces/Friendly-s-Management-/src/main/resources/plugin.yml" fullpath="plugin.yml" />
+    </jar>
+    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Modern.jar">
+      <fileset dir="/workspaces/Friendly-s-Management-/target/classes">
+        <exclude name="plugin*.yml" />
+      </fileset>
       <zipfileset file="/workspaces/Friendly-s-Management-/src/main/resources/plugin-modern.yml" fullpath="plugin.yml" />
     </jar>
-    <echo message="Successfully created both versions:" />
+    <echo message="SUCCESS! Generated ONLY 2 jars in target:" />
     <echo message="[+] target/StaffCore-1.0.2-Legacy.jar (For 1.8.8 - 1.12.2)" />
     <echo message="[+] target/StaffCore-1.0.2-Modern.jar (For 1.13 - 1.20+)" />
   </target>

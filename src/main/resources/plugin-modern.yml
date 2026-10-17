@@ -1,7 +1,7 @@
 name: StaffCore
 version: 1.0.2
 main: com.github.staffcore.StaffCore
-api-version: '1.13'
+api-version: '1.20'
 author: StaffCoreDev
 description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, BungeeCord, and Utilities.
 
@@ -107,8 +107,8 @@ commands:
     usage: /tpall [player | x y z]
     permission: staffcore.command.teleport
   invsee:
-    description: Inspects another player's inventory, armor, and off-hand.
-    usage: /invsee <player>
+    description: Inspects and edits another player's inventory, armor, and off-hand.
+    usage: /invsee <player> [direct]
     permission: staffcore.command.invsee
   enchant:
     description: Applies an enchantment with levels exceeding vanilla limits (up to 32767).
@@ -178,7 +178,7 @@ permissions:
     description: Allows using /tphere and /tpall.
     default: op
   staffcore.command.invsee:
-    description: Allows viewing player inventories.
+    description: Allows viewing and editing player inventories.
     default: op
   staffcore.command.enchant:
     description: Allows unsafe high-level enchanting.

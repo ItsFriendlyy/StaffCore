@@ -73,7 +73,7 @@
                 <version>3.3.0</version>
             </plugin>
 
-            <!-- Dual-Jar Builder: Builds Legacy (<1.13) and Modern (1.13+) Jars -->
+            <!-- Dual-Jar Builder: Cleanly builds ONLY Legacy and Modern Jars -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
@@ -88,25 +88,29 @@
                         <configuration>
                             <target>
                                 <echo message="===================================================="/>
-                                <echo message="Packaging StaffCore Legacy and Modern Jars..."/>
+                                <echo message="Building Clean StaffCore Legacy &amp; Modern Jars..."/>
                                 <echo message="===================================================="/>
 
-                                <!-- 1. Legacy Jar (< 1.13: Minecraft 1.8.8 - 1.12.2) -->
-                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                                      tofile="${project.build.directory}/StaffCore-${project.version}-Legacy.jar"
-                                      overwrite="true"/>
+                                <!-- 1. Delete the default jar so target/ ONLY has Legacy and Modern -->
+                                <delete file="${project.build.directory}/${project.build.finalName}.jar" quiet="true"/>
 
-                                <!-- 2. Modern Jar (1.13+: Minecraft 1.13 - 1.20+) -->
-                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                                      tofile="${project.build.directory}/StaffCore-${project.version}-Modern.jar"
-                                      overwrite="true"/>
-                                <jar destfile="${project.build.directory}/StaffCore-${project.version}-Modern.jar"
-                                     update="true">
-                                    <zipfileset file="${project.basedir}/src/main/resources/plugin-modern.yml"
-                                                fullpath="plugin.yml"/>
+                                <!-- 2. Clean build Legacy Jar (< 1.13) from compiled classes -->
+                                <jar destfile="${project.build.directory}/StaffCore-${project.version}-Legacy.jar">
+                                    <fileset dir="${project.build.outputDirectory}">
+                                        <exclude name="plugin*.yml"/>
+                                    </fileset>
+                                    <zipfileset file="${project.basedir}/src/main/resources/plugin.yml" fullpath="plugin.yml"/>
                                 </jar>
 
-                                <echo message="Successfully created both versions:"/>
+                                <!-- 3. Clean build Modern Jar (1.13 - 1.20+) with api-version: '1.20' -->
+                                <jar destfile="${project.build.directory}/StaffCore-${project.version}-Modern.jar">
+                                    <fileset dir="${project.build.outputDirectory}">
+                                        <exclude name="plugin*.yml"/>
+                                    </fileset>
+                                    <zipfileset file="${project.basedir}/src/main/resources/plugin-modern.yml" fullpath="plugin.yml"/>
+                                </jar>
+
+                                <echo message="SUCCESS! Generated ONLY 2 jars in target:"/>
                                 <echo message="[+] target/StaffCore-${project.version}-Legacy.jar (For 1.8.8 - 1.12.2)"/>
                                 <echo message="[+] target/StaffCore-${project.version}-Modern.jar (For 1.13 - 1.20+)"/>
                             </target>

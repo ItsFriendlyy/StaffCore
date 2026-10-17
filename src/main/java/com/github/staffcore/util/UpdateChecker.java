@@ -13,6 +13,8 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class UpdateChecker implements Listener {
 
@@ -53,29 +55,31 @@ public class UpdateChecker implements Listener {
                     BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        // Check for GitHub release tags in HTML (/releases/tag/v1.0.2)
+                        // Check for GitHub release tags in HTML (/releases/tag/...)
                         if (line.contains("/releases/tag/")) {
                             int tagIndex = line.indexOf("/releases/tag/");
                             int start = tagIndex + "/releases/tag/".length();
                             int end = line.indexOf("\"", start);
                             if (end != -1) {
-                                String tag = line.substring(start, end).trim();
-                                if (tag.contains("/")) {
-                                    tag = tag.substring(0, tag.indexOf("/"));
+                                String rawTag = line.substring(start, end).trim();
+                                if (rawTag.contains("/")) {
+                                    rawTag = rawTag.substring(0, rawTag.indexOf("/"));
                                 }
-                                parseReleaseTag(tag);
-                                break;
+                                if (evaluateReleaseTag(rawTag)) {
+                                    break;
+                                }
                             }
                         }
-                        // Fallback check if response returns JSON format
+                        // Fallback check for API JSON response
                         if (line.contains("\"tag_name\"")) {
                             int idx = line.indexOf("\"tag_name\"");
                             int q1 = line.indexOf("\"", idx + 10);
                             int q2 = line.indexOf("\"", q1 + 1);
                             if (q1 != -1 && q2 != -1) {
-                                String tag = line.substring(q1 + 1, q2).trim();
-                                parseReleaseTag(tag);
-                                break;
+                                String rawTag = line.substring(q1 + 1, q2).trim();
+                                if (evaluateReleaseTag(rawTag)) {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -87,31 +91,67 @@ public class UpdateChecker implements Listener {
         });
     }
 
-    private void parseReleaseTag(String tag) {
-        this.latestVersion = tag.startsWith("v") ? tag.substring(1) : tag;
+    private boolean evaluateReleaseTag(String rawTag) {
+        String versionDigits = extractVersionDigits(rawTag);
+        // Ignore non-version tags (such as "minecraft")
+        if (versionDigits.isEmpty()) {
+            return false;
+        }
 
-        if (!this.latestVersion.equalsIgnoreCase(this.currentVersion)) {
+        this.latestVersion = versionDigits;
+        if (isNewer(this.latestVersion, this.currentVersion)) {
             this.updateAvailable = true;
             plugin.getLogger().warning("=================================================");
-            plugin.getLogger().warning("A new version of StaffCore is available: " + tag);
+            plugin.getLogger().warning("A new version of StaffCore is available: v" + latestVersion);
             plugin.getLogger().warning("Your current version: v" + currentVersion);
             plugin.getLogger().warning("Download here: " + updateUrl);
             plugin.getLogger().warning("=================================================");
         } else {
+            this.updateAvailable = false;
             plugin.getLogger().info("StaffCore is up to date (v" + currentVersion + ").");
+        }
+        return true;
+    }
+
+    private String extractVersionDigits(String input) {
+        if (input == null) return "";
+        Matcher matcher = Pattern.compile("(\\d+(\\.\\d+)+)").matcher(input);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return "";
+    }
+
+    private boolean isNewer(String remote, String current) {
+        if (remote == null || current == null || remote.isEmpty() || current.isEmpty()) return false;
+        String[] rParts = remote.split("\\.");
+        String[] cParts = current.split("\\.");
+        int length = Math.max(rParts.length, cParts.length);
+
+        for (int i = 0; i < length; i++) {
+            int r = i < rParts.length ? parseSafeInt(rParts[i]) : 0;
+            int c = i < cParts.length ? parseSafeInt(cParts[i]) : 0;
+            if (r > c) return true;
+            if (r < c) return false;
+        }
+        return false;
+    }
+
+    private int parseSafeInt(String s) {
+        try {
+            return Integer.parseInt(s.replaceAll("[^0-9]", ""));
+        } catch (Exception e) {
+            return 0;
         }
     }
 
-    /**
-     * Called by PunishmentListener or join handlers to alert staff members when an update is available.
-     */
     public void notifyPlayer(Player player) {
         if (!updateAvailable) return;
 
         if (player.isOp() || player.hasPermission("staffcore.staff") || player.hasPermission("staffcore.admin")) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&8[&cStaffCore&8] &eA new version &a(" + (latestVersion != null ? "v" + latestVersion : "update") + ") &eis available!"));
+                        "&8[&cStaffCore&8] &eA new version &a(v" + latestVersion + ") &eis available!"));
                 player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                         "&8[&cStaffCore&8] &eDownload here: &b" + updateUrl));
             }, 40L);
