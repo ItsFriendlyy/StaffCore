@@ -13,13 +13,11 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
-import java.util.ArrayList;
+import java.lang.reflect.Method;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,6 +26,7 @@ public class UtilityCommands implements CommandExecutor {
     private final StaffCore plugin;
     public static final Set<UUID> invinciblePlayers = new HashSet<>();
     public static final String INVSEE_PREFIX = ChatColor.DARK_GRAY + "Invsee: " + ChatColor.DARK_RED;
+    public static final String ARMOR_PREFIX = ChatColor.DARK_GRAY + "Armor: " + ChatColor.DARK_RED;
 
     public UtilityCommands(StaffCore plugin) {
         this.plugin = plugin;
@@ -151,7 +150,7 @@ public class UtilityCommands implements CommandExecutor {
             speedVal = Integer.parseInt(args[0]);
             if (speedVal < 1 || speedVal > 10) throw new NumberFormatException();
         } catch (NumberFormatException e) {
-            sender.sendMessage(ChatColor.RED + "Speed must be a number between 1 and 10!");
+            sender.sendMessage(ChatColor.RED + "Speed must be a number between 1 and 10! (1 is normal, 10 is max)");
             return true;
         }
 
@@ -169,13 +168,18 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        float bukkitSpeed = speedVal / 10.0f;
         if (target.isFlying()) {
-            target.setFlySpeed(bukkitSpeed);
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFly speed set to &e" + speedVal + "&a for &e" + target.getName() + "&a."));
+            // Speed 1 = 0.1f (vanilla default fly speed), Speed 10 = 1.0f (max speed)
+            float flySpeed = (speedVal == 1) ? 0.1f : (0.1f + (speedVal - 1) * (0.9f / 9.0f));
+            target.setFlySpeed(Math.min(1.0f, flySpeed));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                    "&aFly speed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + target.getName() + "&a."));
         } else {
-            target.setWalkSpeed(bukkitSpeed * 0.2f * 5.0f);
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aWalk speed set to &e" + speedVal + "&a for &e" + target.getName() + "&a."));
+            // Speed 1 = 0.2f (vanilla default walk speed), Speed 10 = 1.0f (max speed)
+            float walkSpeed = (speedVal == 1) ? 0.2f : (0.2f + (speedVal - 1) * (0.8f / 9.0f));
+            target.setWalkSpeed(Math.min(1.0f, walkSpeed));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                    "&aWalk speed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + target.getName() + "&a."));
         }
         return true;
     }
@@ -266,62 +270,49 @@ public class UtilityCommands implements CommandExecutor {
 
     private boolean handleInvsee(Player staff, String[] args) {
         if (args.length < 1) {
-            staff.sendMessage(ChatColor.RED + "Usage: /invsee <player> [direct]");
+            staff.sendMessage(ChatColor.RED + "Usage: /invsee <player> [armor]");
             return true;
         }
         Player target = Bukkit.getPlayer(args[0]);
-        if (target == null) {
+        if (target == null || !target.isOnline()) {
             staff.sendMessage(ChatColor.RED + "Player " + args[0] + " not found or is offline!");
             return true;
         }
 
-        if (args.length > 1 && args[1].equalsIgnoreCase("direct")) {
-            staff.openInventory(target.getInventory());
-            staff.sendMessage(ChatColor.GREEN + "Opened " + target.getName() + "'s direct inventory.");
+        if (target.equals(staff)) {
+            staff.sendMessage(ChatColor.RED + "You cannot invsee yourself!");
             return true;
         }
 
-        Inventory gui = Bukkit.createInventory(staff, 54, INVSEE_PREFIX + target.getName());
+        // View and edit armor
+        if (args.length > 1 && args[1].equalsIgnoreCase("armor")) {
+            Inventory armorGui = Bukkit.createInventory(null, 9, ARMOR_PREFIX + target.getName());
+            ItemStack[] armor = target.getInventory().getArmorContents();
+            if (armor != null) {
+                if (armor.length > 0) armorGui.setItem(0, armor[0]); // Boots
+                if (armor.length > 1) armorGui.setItem(1, armor[1]); // Leggings
+                if (armor.length > 2) armorGui.setItem(2, armor[2]); // Chestplate
+                if (armor.length > 3) armorGui.setItem(3, armor[3]); // Helmet
+            }
+            
+            // Safe reflection for off-hand on 1.9+ servers
+            try {
+                Method m = target.getInventory().getClass().getMethod("getItemInOffHand");
+                ItemStack offhand = (ItemStack) m.invoke(target.getInventory());
+                if (offhand != null) {
+                    armorGui.setItem(4, offhand);
+                }
+            } catch (Throwable ignored) {}
 
-        for (int i = 0; i < 36; i++) {
-            gui.setItem(i, target.getInventory().getItem(i));
+            staff.openInventory(armorGui);
+            staff.sendMessage(ChatColor.GREEN + "Opened " + target.getName() + "'s armor. You can take or swap armor pieces.");
+            return true;
         }
 
-        Material glassMat = Material.matchMaterial("GRAY_STAINED_GLASS_PANE");
-        if (glassMat == null) glassMat = Material.matchMaterial("STAINED_GLASS_PANE");
-        ItemStack divider = new ItemStack(glassMat != null ? glassMat : Material.STONE);
-        ItemMeta meta = divider.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.DARK_GRAY + "↑ Inventory | Armor ↓");
-            divider.setItemMeta(meta);
-        }
-        for (int i = 36; i < 45; i++) {
-            gui.setItem(i, divider);
-        }
-
-        ItemStack[] armor = target.getInventory().getArmorContents();
-        if (armor != null) {
-            if (armor.length > 0) gui.setItem(45, armor[0]); // Boots
-            if (armor.length > 1) gui.setItem(46, armor[1]); // Leggings
-            if (armor.length > 2) gui.setItem(47, armor[2]); // Chestplate
-            if (armor.length > 3) gui.setItem(48, armor[3]); // Helmet
-        }
-
-        ItemStack info = new ItemStack(Material.PAPER);
-        ItemMeta infoMeta = info.getItemMeta();
-        if (infoMeta != null) {
-            infoMeta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + target.getName());
-            List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Health: " + ChatColor.RED + Math.round(target.getHealth()) + "/" + Math.round(target.getMaxHealth()));
-            lore.add(ChatColor.GRAY + "Food: " + ChatColor.GOLD + target.getFoodLevel() + "/20");
-            lore.add(ChatColor.GREEN + "✔ Fully Editable in Real Time");
-            infoMeta.setLore(lore);
-            info.setItemMeta(infoMeta);
-        }
-        gui.setItem(53, info);
-
-        staff.openInventory(gui);
-        staff.sendMessage(ChatColor.GREEN + "Opened " + target.getName() + "'s inventory. You can edit items and armor live.");
+        // Direct native inventory: drag or shift-click items straight into your inventory with zero item loss
+        staff.openInventory(target.getInventory());
+        staff.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                "&aOpened &e" + target.getName() + "&a's inventory. You can take items directly to your inventory! &7(Type &e/invsee " + target.getName() + " armor &7to view armor)"));
         return true;
     }
 
@@ -337,19 +328,9 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        String enchantName = args[0].toUpperCase().replace("MINECRAFT:", "");
-        Enchantment ench = Enchantment.getByName(enchantName);
+        Enchantment ench = getEnchantmentByName(args[0]);
         if (ench == null) {
-            for (Enchantment e : Enchantment.values()) {
-                if (e.getName().equalsIgnoreCase(enchantName) || e.getName().contains(enchantName)) {
-                    ench = e;
-                    break;
-                }
-            }
-        }
-
-        if (ench == null) {
-            staff.sendMessage(ChatColor.RED + "Enchantment '" + args[0] + "' not found!");
+            staff.sendMessage(ChatColor.RED + "Enchantment '" + args[0] + "' not found! Press TAB to view all available enchantments.");
             return true;
         }
 
@@ -370,6 +351,66 @@ public class UtilityCommands implements CommandExecutor {
             staff.sendMessage(ChatColor.GREEN + "Applied " + ench.getName() + " level " + level + " to your held item!");
         }
         return true;
+    }
+
+    private Enchantment getEnchantmentByName(String name) {
+        if (name == null) return null;
+        String clean = name.toUpperCase().replace("MINECRAFT:", "").trim();
+
+        // 1. Direct Bukkit match
+        Enchantment direct = Enchantment.getByName(clean);
+        if (direct != null) return direct;
+
+        // 2. Check friendly aliases across 1.8.8 through 1.20+
+        switch (clean.toLowerCase()) {
+            case "sharpness": return Enchantment.getByName("DAMAGE_ALL");
+            case "smite": return Enchantment.getByName("DAMAGE_UNDEAD");
+            case "bane_of_arthropods":
+            case "baneofarthropods":
+            case "boa": return Enchantment.getByName("DAMAGE_ARTHROPODS");
+            case "knockback": return Enchantment.getByName("KNOCKBACK");
+            case "fire_aspect":
+            case "fireaspect": return Enchantment.getByName("FIRE_ASPECT");
+            case "looting": return Enchantment.getByName("LOOT_BONUS_MOBS");
+            case "efficiency": return Enchantment.getByName("DIG_SPEED");
+            case "silk_touch":
+            case "silktouch": return Enchantment.getByName("SILK_TOUCH");
+            case "unbreaking": return Enchantment.getByName("DURABILITY");
+            case "fortune": return Enchantment.getByName("LOOT_BONUS_BLOCKS");
+            case "power": return Enchantment.getByName("ARROW_DAMAGE");
+            case "punch": return Enchantment.getByName("ARROW_KNOCKBACK");
+            case "flame": return Enchantment.getByName("ARROW_FIRE");
+            case "infinity": return Enchantment.getByName("ARROW_INFINITE");
+            case "protection":
+            case "prot": return Enchantment.getByName("PROTECTION_ENVIRONMENTAL");
+            case "fire_protection":
+            case "fireprotection":
+            case "fireprot": return Enchantment.getByName("PROTECTION_FIRE");
+            case "feather_falling":
+            case "featherfalling": return Enchantment.getByName("PROTECTION_FALL");
+            case "blast_protection":
+            case "blastprotection": return Enchantment.getByName("PROTECTION_EXPLOSIONS");
+            case "projectile_protection":
+            case "projprot": return Enchantment.getByName("PROTECTION_PROJECTILE");
+            case "respiration": return Enchantment.getByName("OXYGEN");
+            case "aqua_affinity":
+            case "aquaaffinity": return Enchantment.getByName("WATER_WORKER");
+            case "thorns": return Enchantment.getByName("THORNS");
+            case "depth_strider":
+            case "depthstrider": return Enchantment.getByName("DEPTH_STRIDER");
+            case "luck_of_the_sea":
+            case "luckofthesea": return Enchantment.getByName("LUCK");
+            case "lure": return Enchantment.getByName("LURE");
+            default: break;
+        }
+
+        // 3. Fuzzy search in all enchantments
+        for (Enchantment e : Enchantment.values()) {
+            if (e.getName().equalsIgnoreCase(clean) || e.getName().replace("_", "").equalsIgnoreCase(clean.replace("_", ""))) {
+                return e;
+            }
+        }
+        return null;
     }
 
     private boolean handleSendServer(CommandSender sender, String[] args) {

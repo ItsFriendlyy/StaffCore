@@ -16,6 +16,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.lang.reflect.Method;
+
 public class UtilityListener implements Listener {
 
     private final StaffCore plugin;
@@ -28,9 +30,6 @@ public class UtilityListener implements Listener {
         this.plugin = (plugin != null) ? plugin : JavaPlugin.getPlugin(StaffCore.class);
     }
 
-    /**
-     * Prevents damage to players with /invincible enabled
-     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player) {
@@ -41,9 +40,6 @@ public class UtilityListener implements Listener {
         }
     }
 
-    /**
-     * Prevents hunger loss for players with /invincible enabled
-     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFoodChange(FoodLevelChangeEvent event) {
         if (event.getEntity() instanceof Player) {
@@ -55,17 +51,20 @@ public class UtilityListener implements Listener {
         }
     }
 
-    /**
-     * Synchronizes edits made in /invsee back to the target player in real time.
-     */
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onInventoryClick(InventoryClickEvent event) {
+    public void onArmorClick(InventoryClickEvent event) {
         String title = event.getView().getTitle();
-        if (title == null || !title.startsWith(UtilityCommands.INVSEE_PREFIX)) {
+        if (title == null) return;
+
+        boolean isArmor = title.startsWith(UtilityCommands.ARMOR_PREFIX);
+        boolean isInvsee = title.startsWith(UtilityCommands.INVSEE_PREFIX);
+
+        if (!isArmor && !isInvsee) {
             return;
         }
 
-        String targetName = ChatColor.stripColor(title.substring(UtilityCommands.INVSEE_PREFIX.length())).trim();
+        String prefix = isArmor ? UtilityCommands.ARMOR_PREFIX : UtilityCommands.INVSEE_PREFIX;
+        String targetName = ChatColor.stripColor(title.substring(prefix.length())).trim();
         Player target = Bukkit.getPlayer(targetName);
         if (target == null || !target.isOnline()) {
             event.setCancelled(true);
@@ -74,51 +73,53 @@ public class UtilityListener implements Listener {
             return;
         }
 
-        int rawSlot = event.getRawSlot();
-
-        // Cancel clicks on divider glass panes (36-44) and info paper (53)
-        if ((rawSlot >= 36 && rawSlot <= 44) || rawSlot == 53) {
-            event.setCancelled(true);
-            return;
-        }
-
-        // Allow all player inventory (0-35) and armor (45-48) edits
-        // Sync modified items to the target player on the next game tick
         Bukkit.getScheduler().runTask(plugin, () -> {
             Inventory top = event.getView().getTopInventory();
-            syncGuiToPlayer(top, target);
+            syncArmorToPlayer(top, target);
+            if (event.getWhoClicked() instanceof Player) {
+                ((Player) event.getWhoClicked()).updateInventory();
+            }
         });
     }
 
     @EventHandler
-    public void onInventoryClose(InventoryCloseEvent event) {
+    public void onArmorClose(InventoryCloseEvent event) {
         String title = event.getView().getTitle();
-        if (title == null || !title.startsWith(UtilityCommands.INVSEE_PREFIX)) {
+        if (title == null) return;
+
+        boolean isArmor = title.startsWith(UtilityCommands.ARMOR_PREFIX);
+        boolean isInvsee = title.startsWith(UtilityCommands.INVSEE_PREFIX);
+
+        if (!isArmor && !isInvsee) {
             return;
         }
 
-        String targetName = ChatColor.stripColor(title.substring(UtilityCommands.INVSEE_PREFIX.length())).trim();
+        String prefix = isArmor ? UtilityCommands.ARMOR_PREFIX : UtilityCommands.INVSEE_PREFIX;
+        String targetName = ChatColor.stripColor(title.substring(prefix.length())).trim();
         Player target = Bukkit.getPlayer(targetName);
         if (target != null && target.isOnline()) {
             Inventory top = event.getView().getTopInventory();
-            syncGuiToPlayer(top, target);
+            syncArmorToPlayer(top, target);
+            if (event.getPlayer() instanceof Player) {
+                ((Player) event.getPlayer()).updateInventory();
+            }
         }
     }
 
-    private void syncGuiToPlayer(Inventory top, Player target) {
+    private void syncArmorToPlayer(Inventory top, Player target) {
         if (top == null || target == null || !target.isOnline()) return;
 
-        // 1. Sync storage slots (0-35)
-        for (int i = 0; i < 36; i++) {
-            target.getInventory().setItem(i, top.getItem(i));
-        }
-
-        // 2. Sync armor slots (45: Boots, 46: Leggings, 47: Chestplate, 48: Helmet)
-        ItemStack boots = top.getItem(45);
-        ItemStack leggings = top.getItem(46);
-        ItemStack chestplate = top.getItem(47);
-        ItemStack helmet = top.getItem(48);
+        ItemStack boots = top.getItem(0);
+        ItemStack leggings = top.getItem(1);
+        ItemStack chestplate = top.getItem(2);
+        ItemStack helmet = top.getItem(3);
         target.getInventory().setArmorContents(new ItemStack[]{boots, leggings, chestplate, helmet});
+
+        // Safe reflection for off-hand across 1.8.8 through 1.20+
+        try {
+            Method m = target.getInventory().getClass().getMethod("setItemInOffHand", ItemStack.class);
+            m.invoke(target.getInventory(), top.getItem(4));
+        } catch (Throwable ignored) {}
 
         target.updateInventory();
     }
