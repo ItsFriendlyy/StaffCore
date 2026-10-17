@@ -4,11 +4,6 @@
 
 **The Ultimate All-in-One Moderation & Staff Utility Suite for Spigot and Paper**
 
-[[https://img.shields.io/github/v/release/ItsFriendlyy/StaffCore?color=red&logo=github]](https://github.com/ItsFriendlyy/StaffCore/releases)
-[[https://img.shields.io/badge/Minecraft-1.8.8%20--%201.20%2B-brightgreen?logo=curseforge]](https://www.spigotmc.org/resources/staffcore-the-ultimate-moderation-staff-suite-1-8-8-1-20.139680/)
-[[https://img.shields.io/badge/License-MIT-blue.svg]](LICENSE)
-[[https://img.shields.io/badge/Platform-Paper%20%7C%20Spigot%20%7C%20BungeeCord-orange]](https://papermc.io)
-
 [SpigotMC Resource](https://www.spigotmc.org/resources/staffcore-the-ultimate-moderation-staff-suite-1-8-8-1-20.139680/) • [Releases](https://github.com/ItsFriendlyy/StaffCore/releases) • [Issue Tracker](https://github.com/ItsFriendlyy/StaffCore/issues)
 
 </div>
