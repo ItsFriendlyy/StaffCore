@@ -10,7 +10,7 @@
     <packaging>jar</packaging>
 
     <name>StaffCore</name>
-    <description>Universal Staff &amp; Management Core (1.8.8 - 1.20+)</description>
+    <description>Advanced Minecraft Staff &amp; Management Suite</description>
 
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -19,17 +19,25 @@
     </properties>
 
     <repositories>
+        <!-- Spigot Repository -->
         <repository>
             <id>spigot-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
+        <!-- PaperMC Repository -->
         <repository>
-            <id>codemc-nms</id>
-            <url>https://repo.codemc.io/repository/nms/</url>
+            <id>papermc-repo</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+        <!-- Sonatype Repository -->
+        <repository>
+            <id>sonatype</id>
+            <url>https://oss.sonatype.org/content/groups/public/</url>
         </repository>
     </repositories>
 
     <dependencies>
+        <!-- Spigot API 1.8.8 for Universal Bytecode Compatibility -->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
@@ -45,7 +53,9 @@
     </dependencies>
 
     <build>
+        <defaultGoal>clean package</defaultGoal>
         <plugins>
+            <!-- Java 8 Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -55,11 +65,64 @@
                     <target>1.8</target>
                 </configuration>
             </plugin>
+
+            <!-- Base Jar Packager -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+            </plugin>
+
+            <!-- Dual-Jar Builder: Builds Legacy (<1.13) and Modern (1.13+) Jars -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>create-dual-jars</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <echo message="===================================================="/>
+                                <echo message="Packaging StaffCore Legacy and Modern Jars..."/>
+                                <echo message="===================================================="/>
+
+                                <!-- 1. Legacy Jar (< 1.13: Minecraft 1.8.8 - 1.12.2) -->
+                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                      tofile="${project.build.directory}/StaffCore-${project.version}-Legacy.jar"
+                                      overwrite="true"/>
+
+                                <!-- 2. Modern Jar (1.13+: Minecraft 1.13 - 1.20+) -->
+                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                      tofile="${project.build.directory}/StaffCore-${project.version}-Modern.jar"
+                                      overwrite="true"/>
+                                <jar destfile="${project.build.directory}/StaffCore-${project.version}-Modern.jar"
+                                     update="true">
+                                    <zipfileset file="${project.basedir}/src/main/resources/plugin-modern.yml"
+                                                fullpath="plugin.yml"/>
+                                </jar>
+
+                                <echo message="Successfully created both versions:"/>
+                                <echo message="[+] target/StaffCore-${project.version}-Legacy.jar (For 1.8.8 - 1.12.2)"/>
+                                <echo message="[+] target/StaffCore-${project.version}-Modern.jar (For 1.13 - 1.20+)"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
+
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
+                <excludes>
+                    <exclude>plugin-modern.yml</exclude>
+                </excludes>
             </resource>
         </resources>
     </build>

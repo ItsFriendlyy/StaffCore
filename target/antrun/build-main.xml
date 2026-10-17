@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="maven-antrun-" default="main">
+  <target name="main">
+    <echo message="====================================================" />
+    <echo message="Packaging StaffCore Legacy and Modern Jars..." />
+    <echo message="====================================================" />
+    <copy file="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2.jar" tofile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Legacy.jar" overwrite="true" />
+    <copy file="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2.jar" tofile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Modern.jar" overwrite="true" />
+    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.2-Modern.jar" update="true">
+      <zipfileset file="/workspaces/Friendly-s-Management-/src/main/resources/plugin-modern.yml" fullpath="plugin.yml" />
+    </jar>
+    <echo message="Successfully created both versions:" />
+    <echo message="[+] target/StaffCore-1.0.2-Legacy.jar (For 1.8.8 - 1.12.2)" />
+    <echo message="[+] target/StaffCore-1.0.2-Modern.jar (For 1.13 - 1.20+)" />
+  </target>
+</project>
