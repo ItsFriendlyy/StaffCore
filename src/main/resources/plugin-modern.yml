@@ -15,20 +15,24 @@ commands:
     usage: /tempban <player> <duration> [reason] [-s]
     permission: staffcore.command.tempban
   ipban:
-    description: Permanently IP bans a player.
+    description: Permanently IP bans a player or IP address.
+    aliases: [ban-ip, banip, ip-ban]
     usage: /ipban <player|ip> [reason] [-s]
     permission: staffcore.command.ipban
   tempipban:
-    description: Temporarily IP bans a player.
+    description: Temporarily IP bans a player or IP address.
+    aliases: [tempban-ip, tempbanip]
     usage: /tempipban <player|ip> <duration> [reason] [-s]
     permission: staffcore.command.tempipban
   unban:
     description: Unbans a banned player.
+    aliases: [pardon]
     usage: /unban <player>
     permission: staffcore.command.unban
   unbanip:
-    description: Unbans a banned IP address.
-    usage: /unbanip <ip>
+    description: Unbans a banned IP address by player name or IP.
+    aliases: [pardon-ip, pardonip, unban-ip]
+    usage: /unbanip <player|ip>
     permission: staffcore.command.unbanip
   mute:
     description: Permanently mutes a player.
@@ -108,7 +112,7 @@ commands:
     permission: staffcore.command.teleport
   invsee:
     description: Inspects and edits another player's inventory, armor, and off-hand.
-    usage: /invsee <player> [direct]
+    usage: /invsee <player> [armor]
     permission: staffcore.command.invsee
   enchant:
     description: Applies an enchantment with levels exceeding vanilla limits (up to 32767).

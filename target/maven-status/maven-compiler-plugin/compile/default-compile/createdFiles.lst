@@ -1,5 +1,4 @@
 com/github/staffcore/commands/FreezeCommand.class
-com/github/staffcore/punishment/PunishmentManager$1.class
 com/github/staffcore/listeners/GuiListener.class
 com/github/staffcore/StaffCore.class
 com/github/staffcore/freeze/FreezeManager.class

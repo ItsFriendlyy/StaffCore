@@ -94,9 +94,10 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 6. Utility player commands (/freeze, /check, /fly, /gmc, etc.)
-        if (cmd.equals("freeze") || cmd.equals("check") || cmd.equals("unban") || cmd.equals("unmute") ||
-            cmd.equals("unbanip") || cmd.equals("fly") || cmd.equals("invincible") || cmd.equals("god") ||
+        // 6. Utility player commands and unbans
+        if (cmd.equals("freeze") || cmd.equals("check") || cmd.equals("unban") || cmd.equals("pardon") ||
+            cmd.equals("unmute") || cmd.equals("unbanip") || cmd.equals("unban-ip") || cmd.equals("pardon-ip") ||
+            cmd.equals("pardonip") || cmd.equals("fly") || cmd.equals("invincible") || cmd.equals("god") ||
             cmd.equals("gmc") || cmd.equals("gms") || cmd.equals("gma") || cmd.equals("gmsp") || cmd.equals("tphere")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0]);
@@ -104,8 +105,9 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 7. /ban, /ipban, /mute, /warn
-        if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("mute") || cmd.equals("warn")) {
+        // 7. /ban, /ipban, /ban-ip, /banip, /mute, /warn
+        if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("ban-ip") || cmd.equals("banip") ||
+            cmd.equals("mute") || cmd.equals("warn")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0]);
             } else if (args.length == 2) {
@@ -121,8 +123,8 @@ public class StaffTabCompleter implements TabCompleter {
             }
         }
 
-        // 8. /tempban, /tempipban, /tempmute
-        if (cmd.equals("tempban") || cmd.equals("tempipban") || cmd.equals("tempmute")) {
+        // 8. /tempban, /tempipban, /tempban-ip, /tempbanip, /tempmute
+        if (cmd.equals("tempban") || cmd.equals("tempipban") || cmd.equals("tempban-ip") || cmd.equals("tempbanip") || cmd.equals("tempmute")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0]);
             } else if (args.length == 2) {

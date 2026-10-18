@@ -86,35 +86,42 @@ public class PunishCommands implements CommandExecutor {
                 targetIp = onlineTarget.getAddress().getAddress().getHostAddress();
             }
 
-            // OP and bypass permission check
-            if (onlineTarget.isOp() || onlineTarget.hasPermission("staffcore.bypass.ban")) {
+            if (onlineTarget.hasPermission("staffcore.bypass.ban") || onlineTarget.isOp()) {
                 sender.sendMessage(plugin.getMessageManager().color(
                         plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
                                 .replace("%target%", targetName)));
                 return true;
             }
         } else {
-            if (isIp && targetInput.contains(".")) {
+            if (isIp && (targetInput.contains(".") || targetInput.contains(":"))) {
                 targetIp = targetInput;
+                targetName = targetInput;
             } else {
                 @SuppressWarnings("deprecation")
                 OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetInput);
                 if (offlineTarget.hasPlayedBefore() || offlineTarget.isOnline()) {
-                    if (offlineTarget.isOp()) {
-                        sender.sendMessage(plugin.getMessageManager().color(
-                                plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
-                                        .replace("%target%", targetInput)));
-                        return true;
-                    }
                     targetUUID = offlineTarget.getUniqueId();
                     targetName = offlineTarget.getName() != null ? offlineTarget.getName() : targetInput;
+                    if (isIp) {
+                        targetIp = plugin.getPunishmentManager().getLastKnownIp(targetUUID);
+                        if (targetIp == null || targetIp.isEmpty()) {
+                            targetIp = plugin.getPunishmentManager().getLastKnownIpByName(targetName);
+                        }
+                    }
                 } else if (!isIp) {
                     sender.sendMessage(plugin.getMessageManager().color(
                             plugin.getConfig().getString("messages.player-not-found", "&cPlayer not found!")
                                     .replace("%target%", targetInput)));
                     return true;
+                } else {
+                    targetIp = targetInput;
                 }
             }
+        }
+
+        if (isIp && (targetIp == null || targetIp.isEmpty())) {
+            sender.sendMessage(plugin.getMessageManager().color("&cCould not resolve IP for player &e" + targetInput + "&c! Specify an IP directly: /ipban <ip> [reason]"));
+            return true;
         }
 
         PunishmentType type;
@@ -159,7 +166,7 @@ public class PunishCommands implements CommandExecutor {
             targetUUID = onlineTarget.getUniqueId();
             targetName = onlineTarget.getName();
 
-            if (onlineTarget.isOp() || onlineTarget.hasPermission("staffcore.bypass.mute")) {
+            if (onlineTarget.hasPermission("staffcore.bypass.mute") || onlineTarget.isOp()) {
                 sender.sendMessage(plugin.getMessageManager().color(
                         plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
                                 .replace("%target%", targetName)));
@@ -169,12 +176,6 @@ public class PunishCommands implements CommandExecutor {
             @SuppressWarnings("deprecation")
             OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetInput);
             if (offlineTarget.hasPlayedBefore() || offlineTarget.isOnline()) {
-                if (offlineTarget.isOp()) {
-                    sender.sendMessage(plugin.getMessageManager().color(
-                            plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
-                                    .replace("%target%", targetInput)));
-                    return true;
-                }
                 targetUUID = offlineTarget.getUniqueId();
                 targetName = offlineTarget.getName() != null ? offlineTarget.getName() : targetInput;
             } else {
@@ -208,7 +209,7 @@ public class PunishCommands implements CommandExecutor {
             targetUUID = onlineTarget.getUniqueId();
             targetName = onlineTarget.getName();
 
-            if (onlineTarget.isOp() || onlineTarget.hasPermission("staffcore.bypass.warn")) {
+            if (onlineTarget.hasPermission("staffcore.bypass.warn") || onlineTarget.isOp()) {
                 sender.sendMessage(plugin.getMessageManager().color(
                         plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
                                 .replace("%target%", targetName)));
@@ -218,12 +219,6 @@ public class PunishCommands implements CommandExecutor {
             @SuppressWarnings("deprecation")
             OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetInput);
             if (offlineTarget.hasPlayedBefore() || offlineTarget.isOnline()) {
-                if (offlineTarget.isOp()) {
-                    sender.sendMessage(plugin.getMessageManager().color(
-                            plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
-                                    .replace("%target%", targetInput)));
-                    return true;
-                }
                 targetUUID = offlineTarget.getUniqueId();
                 targetName = offlineTarget.getName() != null ? offlineTarget.getName() : targetInput;
             } else {
@@ -264,20 +259,20 @@ public class PunishCommands implements CommandExecutor {
 
     private boolean handleUnbanIp(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unbanip <ip>"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unbanip <player|ip>"));
             return true;
         }
 
-        String ip = args[0];
-        boolean success = plugin.getPunishmentManager().unbanIp(ip);
+        String target = args[0];
+        boolean success = plugin.getPunishmentManager().unbanIp(target);
         if (success) {
             sender.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("messages.unbanip-success", "&aSuccessfully unbanned IP &e%ip%&a.")
-                            .replace("%ip%", ip)));
+                    plugin.getConfig().getString("messages.unbanip-success", "&aSuccessfully unbanned IP for &e%target%&a.")
+                            .replace("%ip%", target).replace("%target%", target)));
         } else {
             sender.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("messages.ip-not-banned", "&cIP &e%ip% &cis not banned!")
-                            .replace("%ip%", ip)));
+                    plugin.getConfig().getString("messages.ip-not-banned", "&cNo active IP ban found for &e%target%&c!")
+                            .replace("%ip%", target).replace("%target%", target)));
         }
         return true;
     }
@@ -307,7 +302,7 @@ public class PunishCommands implements CommandExecutor {
 
     private ParsedReason parseSilentAndReason(String[] args, int startIndex) {
         boolean silent = false;
-        List<String> words = new ArrayList<String>();
+        List<String> words = new ArrayList<>();
 
         for (int i = startIndex; i < args.length; i++) {
             if (args[i].equalsIgnoreCase("-s")) {
@@ -317,17 +312,8 @@ public class PunishCommands implements CommandExecutor {
             }
         }
 
-        String reason = words.isEmpty() ? "No reason specified" : joinStrings(words, " ");
+        String reason = words.isEmpty() ? "No reason specified" : String.join(" ", words);
         return new ParsedReason(silent, reason);
-    }
-
-    private String joinStrings(List<String> list, String delim) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < list.size(); i++) {
-            sb.append(list.get(i));
-            if (i < list.size() - 1) sb.append(delim);
-        }
-        return sb.toString();
     }
 
     private static class ParsedReason {
