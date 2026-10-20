@@ -129,13 +129,20 @@ public final class StaffCore extends JavaPlugin {
         PluginCommand adminCmd = getCommand("staffcore");
         if (adminCmd != null) {
             adminCmd.setExecutor((sender, command, label, args) -> {
-                if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
-                    reloadConfig();
-                    punishmentManager.loadData();
-                    sender.sendMessage(messageManager.getPrefixedMessage("messages.reload-success"));
-                    return true;
+                if (args.length > 0) {
+                    if (args[0].equalsIgnoreCase("reload")) {
+                        reloadConfig();
+                        punishmentManager.loadData();
+                        sender.sendMessage(messageManager.getPrefixedMessage("messages.reload-success"));
+                        updateChecker.checkForUpdates(sender);
+                        return true;
+                    }
+                    if (args[0].equalsIgnoreCase("update") || args[0].equalsIgnoreCase("version") || args[0].equalsIgnoreCase("checkupdate")) {
+                        updateChecker.checkForUpdates(sender);
+                        return true;
+                    }
                 }
-                sender.sendMessage(messageManager.color("&cUsage: /staffcore reload"));
+                sender.sendMessage(messageManager.color("&cUsage: /staffcore <reload | update>"));
                 return true;
             });
         }

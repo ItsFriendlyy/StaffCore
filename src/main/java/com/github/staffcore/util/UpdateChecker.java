@@ -3,6 +3,7 @@ package com.github.staffcore.util;
 import com.github.staffcore.StaffCore;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -20,57 +21,41 @@ public class UpdateChecker implements Listener {
 
     private final StaffCore plugin;
     private final String currentVersion;
-    private final String repo;
-    private String updateUrl = "https://github.com/ItsFriendlyy/StaffCore/releases";
+    private final String updateUrl = "https://github.com/ItsFriendlyy/StaffCore/releases";
     private String latestVersion = null;
     private boolean updateAvailable = false;
 
     public UpdateChecker(StaffCore plugin) {
-        this(plugin, "ItsFriendlyy/StaffCore", "https://github.com/ItsFriendlyy/StaffCore/releases");
-    }
-
-    public UpdateChecker(StaffCore plugin, String repo, String updateUrl) {
         this.plugin = plugin;
         this.currentVersion = plugin.getDescription().getVersion();
-        this.repo = (repo != null && !repo.trim().isEmpty()) ? repo.trim() : "ItsFriendlyy/StaffCore";
-        if (updateUrl != null && !updateUrl.trim().isEmpty()) {
-            this.updateUrl = updateUrl.trim();
-        } else {
-            this.updateUrl = "https://github.com/ItsFriendlyy/StaffCore/releases";
-        }
     }
 
     public void checkForUpdates() {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                URL url = URI.create("https://github.com/ItsFriendlyy/StaffCore/releases").toURL();
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "StaffCore-UpdateChecker");
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
-                conn.setInstanceFollowRedirects(true);
+        checkForUpdates(null);
+    }
 
-                if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+    public void checkForUpdates(CommandSender requester) {
+        if (requester != null) {
+            requester.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                    "&8[&cStaffCore&8] &7Checking GitHub for updates..."));
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean found = false;
+            try {
+                // Try 1: GitHub API (fast and direct)
+                URL apiUrl = URI.create("https://api.github.com/repos/ItsFriendlyy/StaffCore/releases/latest").toURL();
+                HttpURLConnection apiConn = (HttpURLConnection) apiUrl.openConnection();
+                apiConn.setRequestMethod("GET");
+                apiConn.setRequestProperty("User-Agent", "StaffCore-UpdateChecker");
+                apiConn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+                apiConn.setConnectTimeout(5000);
+                apiConn.setReadTimeout(5000);
+
+                if (apiConn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(apiConn.getInputStream()));
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        // Check for GitHub release tags in HTML (/releases/tag/...)
-                        if (line.contains("/releases/tag/")) {
-                            int tagIndex = line.indexOf("/releases/tag/");
-                            int start = tagIndex + "/releases/tag/".length();
-                            int end = line.indexOf("\"", start);
-                            if (end != -1) {
-                                String rawTag = line.substring(start, end).trim();
-                                if (rawTag.contains("/")) {
-                                    rawTag = rawTag.substring(0, rawTag.indexOf("/"));
-                                }
-                                if (evaluateReleaseTag(rawTag)) {
-                                    break;
-                                }
-                            }
-                        }
-                        // Fallback check for API JSON response
                         if (line.contains("\"tag_name\"")) {
                             int idx = line.indexOf("\"tag_name\"");
                             int q1 = line.indexOf("\"", idx + 10);
@@ -78,6 +63,7 @@ public class UpdateChecker implements Listener {
                             if (q1 != -1 && q2 != -1) {
                                 String rawTag = line.substring(q1 + 1, q2).trim();
                                 if (evaluateReleaseTag(rawTag)) {
+                                    found = true;
                                     break;
                                 }
                             }
@@ -85,15 +71,66 @@ public class UpdateChecker implements Listener {
                     }
                     reader.close();
                 }
-            } catch (Exception e) {
-                plugin.getLogger().warning("Could not check for StaffCore updates: " + e.getMessage());
+            } catch (Exception ignored) {}
+
+            // Try 2: HTML Scraping Fallback
+            if (!found) {
+                try {
+                    URL htmlUrl = URI.create("https://github.com/ItsFriendlyy/StaffCore/releases").toURL();
+                    HttpURLConnection conn = (HttpURLConnection) htmlUrl.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setRequestProperty("User-Agent", "StaffCore-UpdateChecker");
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+                    conn.setInstanceFollowRedirects(true);
+
+                    if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            if (line.contains("/releases/tag/")) {
+                                int tagIndex = line.indexOf("/releases/tag/");
+                                int start = tagIndex + "/releases/tag/".length();
+                                int end = line.indexOf("\"", start);
+                                if (end != -1) {
+                                    String rawTag = line.substring(start, end).trim();
+                                    if (rawTag.contains("/")) {
+                                        rawTag = rawTag.substring(0, rawTag.indexOf("/"));
+                                    }
+                                    if (evaluateReleaseTag(rawTag)) {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        reader.close();
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Could not check for StaffCore updates: " + e.getMessage());
+                }
             }
+
+            // Sync back to main thread: instantly alert all online staff players
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (updateAvailable) {
+                    for (Player player : Bukkit.getOnlinePlayers()) {
+                        sendUpdateAlert(player);
+                    }
+                    if (requester != null && !(requester instanceof Player)) {
+                        requester.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                                "&8[&cStaffCore&8] &eUpdate available: &av" + latestVersion + " &e(Current: v" + currentVersion + ")"));
+                    }
+                } else if (requester != null) {
+                    requester.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                            "&8[&cStaffCore&8] &aStaffCore is up to date (v" + currentVersion + ")."));
+                }
+            });
         });
     }
 
     private boolean evaluateReleaseTag(String rawTag) {
         String versionDigits = extractVersionDigits(rawTag);
-        // Ignore non-version tags (such as "minecraft")
         if (versionDigits.isEmpty()) {
             return false;
         }
@@ -145,22 +182,27 @@ public class UpdateChecker implements Listener {
         }
     }
 
-    public void notifyPlayer(Player player) {
+    public void sendUpdateAlert(CommandSender sender) {
         if (!updateAvailable) return;
 
-        if (player.isOp() || player.hasPermission("staffcore.staff") || player.hasPermission("staffcore.admin")) {
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&8[&cStaffCore&8] &eA new version &a(v" + latestVersion + ") &eis available!"));
-                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&8[&cStaffCore&8] &eDownload here: &b" + updateUrl));
-            }, 40L);
+        if (sender.isOp() || sender.hasPermission("staffcore.staff") || sender.hasPermission("staffcore.admin")) {
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&8[&cStaffCore&8] &eA new version &a(v" + latestVersion + ") &eis available!"));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&8[&cStaffCore&8] &eDownload here: &b" + updateUrl));
         }
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        notifyPlayer(event.getPlayer());
+        Player player = event.getPlayer();
+        if (player.isOp() || player.hasPermission("staffcore.staff") || player.hasPermission("staffcore.admin")) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline()) {
+                    sendUpdateAlert(player);
+                }
+            }, 40L);
+        }
     }
 
     public boolean isUpdateAvailable() {
