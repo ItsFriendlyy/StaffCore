@@ -302,7 +302,7 @@ public class PunishmentManager {
                 if (p.isExpired()) {
                     p.setActive(false);
                     saveData();
-                    continue;
+                    return null;
                 }
                 return p;
             }
@@ -313,14 +313,15 @@ public class PunishmentManager {
     public Punishment getActiveIpBan(String ip) {
         if (ip == null || ip.isEmpty()) return null;
         for (Punishment p : punishments) {
-            if (p.getTargetIp() != null && p.getTargetIp().equalsIgnoreCase(ip) && p.isActive() &&
-                (p.getType() == PunishmentType.IP_BAN || p.getType() == PunishmentType.TEMP_IP_BAN)) {
-                if (p.isExpired()) {
-                    p.setActive(false);
-                    saveData();
-                    continue;
+            if (p.isActive() && (p.getType() == PunishmentType.IP_BAN || p.getType() == PunishmentType.TEMP_IP_BAN)) {
+                if (p.getTargetIp() != null && p.getTargetIp().equalsIgnoreCase(ip)) {
+                    if (p.isExpired()) {
+                        p.setActive(false);
+                        saveData();
+                        return null;
+                    }
+                    return p;
                 }
-                return p;
             }
         }
         return null;
@@ -333,7 +334,7 @@ public class PunishmentManager {
                 if (p.isExpired()) {
                     p.setActive(false);
                     saveData();
-                    continue;
+                    return null;
                 }
                 return p;
             }
@@ -372,6 +373,80 @@ public class PunishmentManager {
             }
         }
         return count;
+    }
+
+    /**
+     * Collects all currently banned player names from StaffCore and Bukkit's ban list.
+     */
+    public List<String> getBannedPlayerNames() {
+        Set<String> banned = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
+        // 1. StaffCore internal active bans
+        for (Punishment p : punishments) {
+            if (p.isActive() && (p.getType() == PunishmentType.BAN || p.getType() == PunishmentType.TEMPBAN)) {
+                if (p.isExpired()) {
+                    p.setActive(false);
+                    continue;
+                }
+                if (p.getTargetName() != null && !p.getTargetName().equalsIgnoreCase("Unknown") && !p.getTargetName().isEmpty()) {
+                    banned.add(p.getTargetName());
+                }
+            }
+        }
+
+        // 2. Bukkit native BanList (BanList.Type.NAME)
+        try {
+            for (org.bukkit.BanEntry entry : Bukkit.getBanList(org.bukkit.BanList.Type.NAME).getBanEntries()) {
+                if (entry != null && entry.getTarget() != null) {
+                    banned.add(entry.getTarget());
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        // 3. Bukkit getBannedPlayers() for older Spigot compatibility
+        try {
+            for (org.bukkit.OfflinePlayer op : Bukkit.getBannedPlayers()) {
+                if (op != null && op.getName() != null) {
+                    banned.add(op.getName());
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return new ArrayList<>(banned);
+    }
+
+    /**
+     * Collects all currently IP-banned player names and raw IP addresses.
+     */
+    public List<String> getIpBannedNamesOrIps() {
+        Set<String> ipBanned = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
+        // 1. StaffCore internal active IP bans
+        for (Punishment p : punishments) {
+            if (p.isActive() && (p.getType() == PunishmentType.IP_BAN || p.getType() == PunishmentType.TEMP_IP_BAN)) {
+                if (p.isExpired()) {
+                    p.setActive(false);
+                    continue;
+                }
+                if (p.getTargetName() != null && !p.getTargetName().equalsIgnoreCase("Unknown") && !p.getTargetName().isEmpty()) {
+                    ipBanned.add(p.getTargetName());
+                }
+                if (p.getTargetIp() != null && !p.getTargetIp().isEmpty()) {
+                    ipBanned.add(p.getTargetIp());
+                }
+            }
+        }
+
+        // 2. Bukkit IP ban list
+        try {
+            for (org.bukkit.BanEntry entry : Bukkit.getBanList(org.bukkit.BanList.Type.IP).getBanEntries()) {
+                if (entry != null && entry.getTarget() != null) {
+                    ipBanned.add(entry.getTarget());
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return new ArrayList<>(ipBanned);
     }
 
     public String getBanKickMessage(Punishment p) {

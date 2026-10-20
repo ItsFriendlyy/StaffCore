@@ -13,6 +13,8 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.potion.PotionEffect;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -44,12 +46,104 @@ public class UtilityCommands implements CommandExecutor {
         }
     }
 
+    public static ItemStack createGrayPane() {
+        ItemStack pane;
+        try {
+            Material mat = Material.valueOf("GRAY_STAINED_GLASS_PANE");
+            pane = new ItemStack(mat);
+        } catch (IllegalArgumentException e) {
+            pane = new ItemStack(Material.valueOf("STAINED_GLASS_PANE"), 1, (short) 7);
+        }
+        ItemMeta meta = pane.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.GRAY + " ");
+            pane.setItemMeta(meta);
+        }
+        return pane;
+    }
+
+    public static void openInvsee(Player staff, Player target) {
+        Inventory gui = Bukkit.createInventory(null, 54, INVSEE_PREFIX + target.getName());
+        ItemStack pane = createGrayPane();
+
+        // Row 0: Equipment (Slots 0 to 8)
+        // Armor (Slots 0 to 3: Helmet, Chestplate, Leggings, Boots)
+        gui.setItem(0, target.getInventory().getHelmet());
+        gui.setItem(1, target.getInventory().getChestplate());
+        gui.setItem(2, target.getInventory().getLeggings());
+        gui.setItem(3, target.getInventory().getBoots());
+
+        // Slot 4: One slot/item frame spacer between Armor and Off-Hand
+        gui.setItem(4, pane);
+
+        // Slot 5: Off-Hand item (Reflection for 1.9+ servers)
+        try {
+            Method m = target.getInventory().getClass().getMethod("getItemInOffHand");
+            ItemStack offhand = (ItemStack) m.invoke(target.getInventory());
+            if (offhand != null) {
+                gui.setItem(5, offhand);
+            }
+        } catch (Throwable ignored) {}
+
+        // Slots 6, 7, 8: Gray glass panes
+        gui.setItem(6, pane);
+        gui.setItem(7, pane);
+        gui.setItem(8, pane);
+
+        // Row 1: Divider row (Slots 9 to 17)
+        for (int i = 9; i <= 17; i++) {
+            gui.setItem(i, pane);
+        }
+
+        // Rows 2, 3, 4: Main Inventory (Slots 18 to 44 -> target slots 9 to 35)
+        for (int i = 9; i <= 35; i++) {
+            gui.setItem(18 + (i - 9), target.getInventory().getItem(i));
+        }
+
+        // Row 5: Hotbar (Slots 45 to 53 -> target slots 0 to 8)
+        for (int i = 0; i <= 8; i++) {
+            gui.setItem(45 + i, target.getInventory().getItem(i));
+        }
+
+        staff.openInventory(gui);
+        staff.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                "&aOpened inventory of &e" + target.getName() + "&a."));
+    }
+
+    public static void syncGuiToTarget(Inventory top, Player target) {
+        if (top == null || target == null || !target.isOnline()) return;
+
+        // 1. Armor (Slots 0 to 3)
+        target.getInventory().setHelmet(top.getItem(0));
+        target.getInventory().setChestplate(top.getItem(1));
+        target.getInventory().setLeggings(top.getItem(2));
+        target.getInventory().setBoots(top.getItem(3));
+
+        // 2. Off-hand (Slot 5) via reflection for 1.9+
+        try {
+            Method m = target.getInventory().getClass().getMethod("setItemInOffHand", ItemStack.class);
+            m.invoke(target.getInventory(), top.getItem(5));
+        } catch (Throwable ignored) {}
+
+        // 3. Main inventory (Slots 18-44 -> target slots 9-35)
+        for (int i = 9; i <= 35; i++) {
+            target.getInventory().setItem(i, top.getItem(18 + (i - 9)));
+        }
+
+        // 4. Hotbar (Slots 45-53 -> target slots 0-8)
+        for (int i = 0; i <= 8; i++) {
+            target.getInventory().setItem(i, top.getItem(45 + i));
+        }
+
+        target.updateInventory();
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String cmd = command.getName().toLowerCase();
 
-        if (!(sender instanceof Player) && (cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant"))) {
-            if (args.length == 0 || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant")) {
+        if (!(sender instanceof Player) && (cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair"))) {
+            if (args.length == 0 || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair")) {
                 sender.sendMessage(ChatColor.RED + "This command can only be executed by a player in-game!");
                 return true;
             }
@@ -80,6 +174,17 @@ public class UtilityCommands implements CommandExecutor {
                 return handleEnchant((Player) sender, args);
             case "sendserver":
                 return handleSendServer(sender, args);
+            case "heal":
+                return handleHeal(sender, args);
+            case "feed":
+                return handleFeed(sender, args);
+            case "repair":
+                return handleRepair((Player) sender, args);
+            case "struck":
+            case "strike":
+                return handleStruck(sender, args);
+            case "sudo":
+                return handleSudo(sender, args);
             default:
                 return false;
         }
@@ -169,13 +274,11 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         if (target.isFlying()) {
-            // Speed 1 = 0.1f (vanilla default fly speed), Speed 10 = 1.0f (max speed)
             float flySpeed = (speedVal == 1) ? 0.1f : (0.1f + (speedVal - 1) * (0.9f / 9.0f));
             target.setFlySpeed(Math.min(1.0f, flySpeed));
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
                     "&aFly speed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + target.getName() + "&a."));
         } else {
-            // Speed 1 = 0.2f (vanilla default walk speed), Speed 10 = 1.0f (max speed)
             float walkSpeed = (speedVal == 1) ? 0.2f : (0.2f + (speedVal - 1) * (0.8f / 9.0f));
             target.setWalkSpeed(Math.min(1.0f, walkSpeed));
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
@@ -270,7 +373,7 @@ public class UtilityCommands implements CommandExecutor {
 
     private boolean handleInvsee(Player staff, String[] args) {
         if (args.length < 1) {
-            staff.sendMessage(ChatColor.RED + "Usage: /invsee <player> [armor]");
+            staff.sendMessage(ChatColor.RED + "Usage: /invsee <player>");
             return true;
         }
         Player target = Bukkit.getPlayer(args[0]);
@@ -284,41 +387,13 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        // View and edit armor
-        if (args.length > 1 && args[1].equalsIgnoreCase("armor")) {
-            Inventory armorGui = Bukkit.createInventory(null, 9, ARMOR_PREFIX + target.getName());
-            ItemStack[] armor = target.getInventory().getArmorContents();
-            if (armor != null) {
-                if (armor.length > 0) armorGui.setItem(0, armor[0]); // Boots
-                if (armor.length > 1) armorGui.setItem(1, armor[1]); // Leggings
-                if (armor.length > 2) armorGui.setItem(2, armor[2]); // Chestplate
-                if (armor.length > 3) armorGui.setItem(3, armor[3]); // Helmet
-            }
-            
-            // Safe reflection for off-hand on 1.9+ servers
-            try {
-                Method m = target.getInventory().getClass().getMethod("getItemInOffHand");
-                ItemStack offhand = (ItemStack) m.invoke(target.getInventory());
-                if (offhand != null) {
-                    armorGui.setItem(4, offhand);
-                }
-            } catch (Throwable ignored) {}
-
-            staff.openInventory(armorGui);
-            staff.sendMessage(ChatColor.GREEN + "Opened " + target.getName() + "'s armor. You can take or swap armor pieces.");
-            return true;
-        }
-
-        // Direct native inventory: drag or shift-click items straight into your inventory with zero item loss
-        staff.openInventory(target.getInventory());
-        staff.sendMessage(ChatColor.translateAlternateColorCodes('&', 
-                "&aOpened &e" + target.getName() + "&a's inventory. You can take items directly to your inventory! &7(Type &e/invsee " + target.getName() + " armor &7to view armor)"));
+        openInvsee(staff, target);
         return true;
     }
 
     private boolean handleEnchant(Player staff, String[] args) {
-        if (args.length < 2) {
-            staff.sendMessage(ChatColor.RED + "Usage: /enchant <enchantment> <level>");
+        if (args.length < 1) {
+            staff.sendMessage(ChatColor.RED + "Usage: /enchant <enchantment> [level]");
             return true;
         }
 
@@ -334,13 +409,17 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        int level;
-        try {
-            level = Integer.parseInt(args[1]);
-            if (level < 0 || level > 32767) throw new NumberFormatException();
-        } catch (NumberFormatException e) {
-            staff.sendMessage(ChatColor.RED + "Level must be an integer between 0 and 32767!");
-            return true;
+        int level = 1;
+        if (args.length >= 2) {
+            try {
+                level = Integer.parseInt(args[1]);
+                if (level < 0 || level > 255) throw new NumberFormatException();
+            } catch (NumberFormatException e) {
+                staff.sendMessage(ChatColor.RED + "Level must be an integer between 0 and 255! (Max 255)");
+                return true;
+            }
+        } else {
+            level = ench.getMaxLevel();
         }
 
         if (level == 0) {
@@ -435,6 +514,146 @@ public class UtilityCommands implements CommandExecutor {
             sender.sendMessage(ChatColor.GREEN + "Sending " + target.getName() + " to server " + serverName + "...");
         } catch (Exception e) {
             sender.sendMessage(ChatColor.RED + "Failed to send player to server: " + e.getMessage());
+        }
+        return true;
+    }
+
+    private boolean handleHeal(CommandSender sender, String[] args) {
+        Player target;
+        if (args.length > 0) {
+            target = Bukkit.getPlayer(args[0]);
+            if (target == null) {
+                sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
+                return true;
+            }
+        } else if (sender instanceof Player) {
+            target = (Player) sender;
+        } else {
+            sender.sendMessage(ChatColor.RED + "Usage from console: /heal <player>");
+            return true;
+        }
+
+        target.setHealth(target.getMaxHealth());
+        target.setFoodLevel(20);
+        target.setSaturation(20.0f);
+        target.setExhaustion(0.0f);
+        target.setFireTicks(0);
+        for (PotionEffect effect : target.getActivePotionEffects()) {
+            target.removePotionEffect(effect.getType());
+        }
+
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully healed &e" + target.getName() + "&a."));
+        if (!target.equals(sender)) {
+            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
+        }
+        return true;
+    }
+
+    private boolean handleFeed(CommandSender sender, String[] args) {
+        Player target;
+        if (args.length > 0) {
+            target = Bukkit.getPlayer(args[0]);
+            if (target == null) {
+                sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
+                return true;
+            }
+        } else if (sender instanceof Player) {
+            target = (Player) sender;
+        } else {
+            sender.sendMessage(ChatColor.RED + "Usage from console: /feed <player>");
+            return true;
+        }
+
+        target.setFoodLevel(20);
+        target.setSaturation(20.0f);
+        target.setExhaustion(0.0f);
+
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully fed &e" + target.getName() + "&a."));
+        if (!target.equals(sender)) {
+            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour appetite has been fully sated by staff."));
+        }
+        return true;
+    }
+
+    private boolean handleRepair(Player staff, String[] args) {
+        ItemStack item = staff.getItemInHand();
+        if (item == null || item.getType() == Material.AIR) {
+            staff.sendMessage(ChatColor.RED + "You must be holding an item in your hand to repair!");
+            return true;
+        }
+
+        if (item.getType().getMaxDurability() <= 0) {
+            staff.sendMessage(ChatColor.RED + "This item does not have durability and cannot be repaired!");
+            return true;
+        }
+
+        item.setDurability((short) 0);
+        staff.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                "&aSuccessfully repaired &e" + item.getType().name().replace("_", " ") + "&a to full durability!"));
+        return true;
+    }
+
+    private boolean handleStruck(CommandSender sender, String[] args) {
+        Location loc = null;
+        String targetDesc = "target location";
+
+        if (args.length > 0) {
+            Player target = Bukkit.getPlayer(args[0]);
+            if (target == null) {
+                sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
+                return true;
+            }
+            loc = target.getLocation();
+            targetDesc = target.getName();
+        } else if (sender instanceof Player) {
+            Player p = (Player) sender;
+            try {
+                loc = p.getTargetBlock((Set<Material>) null, 120).getLocation();
+            } catch (Throwable t) {
+                loc = p.getLocation();
+            }
+            targetDesc = "your crosshair";
+        } else {
+            sender.sendMessage(ChatColor.RED + "Usage from console: /struck <player>");
+            return true;
+        }
+
+        if (loc != null && loc.getWorld() != null) {
+            loc.getWorld().strikeLightning(loc);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aStruck lightning at &e" + targetDesc + "&a!"));
+        }
+        return true;
+    }
+
+    private boolean handleSudo(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "Usage: /sudo <player> <command | m:message>");
+            return true;
+        }
+
+        Player target = Bukkit.getPlayer(args[0]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found or is offline!");
+            return true;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i < args.length; i++) {
+            if (i > 1) sb.append(" ");
+            sb.append(args[i]);
+        }
+        String input = sb.toString().trim();
+
+        if (input.toLowerCase().startsWith("m:")) {
+            String chatMessage = input.substring(2).trim();
+            target.chat(chatMessage);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                    "&aForced &e" + target.getName() + " &ato chat: &f" + chatMessage));
+        } else {
+            String commandToRun = input.startsWith("/") ? input.substring(1) : input;
+            target.performCommand(commandToRun);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                    "&aForced &e" + target.getName() + " &ato execute: &f/" + commandToRun));
         }
         return true;
     }

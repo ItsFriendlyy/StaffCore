@@ -12,11 +12,9 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.lang.reflect.Method;
 
 public class UtilityListener implements Listener {
 
@@ -52,19 +50,25 @@ public class UtilityListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onArmorClick(InventoryClickEvent event) {
+    public void onInvseeClick(InventoryClickEvent event) {
         String title = event.getView().getTitle();
-        if (title == null) return;
-
-        boolean isArmor = title.startsWith(UtilityCommands.ARMOR_PREFIX);
-        boolean isInvsee = title.startsWith(UtilityCommands.INVSEE_PREFIX);
-
-        if (!isArmor && !isInvsee) {
+        if (title == null || !title.startsWith(UtilityCommands.INVSEE_PREFIX)) {
             return;
         }
 
-        String prefix = isArmor ? UtilityCommands.ARMOR_PREFIX : UtilityCommands.INVSEE_PREFIX;
-        String targetName = ChatColor.stripColor(title.substring(prefix.length())).trim();
+        int rawSlot = event.getRawSlot();
+        Inventory top = event.getView().getTopInventory();
+
+        // Cancel click on any gray glass pane slots (spots that do nothing)
+        // Slot 4: spacer between Armor and Off-Hand
+        // Slots 6, 7, 8: empty spots in top row
+        // Slots 9 to 17: divider row
+        if (rawSlot == 4 || (rawSlot >= 6 && rawSlot <= 17)) {
+            event.setCancelled(true);
+            return;
+        }
+
+        String targetName = ChatColor.stripColor(title.substring(UtilityCommands.INVSEE_PREFIX.length())).trim();
         Player target = Bukkit.getPlayer(targetName);
         if (target == null || !target.isOnline()) {
             event.setCancelled(true);
@@ -73,54 +77,49 @@ public class UtilityListener implements Listener {
             return;
         }
 
+        // Live two-way synchronization on the next tick
         Bukkit.getScheduler().runTask(plugin, () -> {
-            Inventory top = event.getView().getTopInventory();
-            syncArmorToPlayer(top, target);
+            UtilityCommands.syncGuiToTarget(top, target);
             if (event.getWhoClicked() instanceof Player) {
                 ((Player) event.getWhoClicked()).updateInventory();
             }
         });
     }
 
-    @EventHandler
-    public void onArmorClose(InventoryCloseEvent event) {
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInvseeDrag(InventoryDragEvent event) {
         String title = event.getView().getTitle();
-        if (title == null) return;
-
-        boolean isArmor = title.startsWith(UtilityCommands.ARMOR_PREFIX);
-        boolean isInvsee = title.startsWith(UtilityCommands.INVSEE_PREFIX);
-
-        if (!isArmor && !isInvsee) {
+        if (title == null || !title.startsWith(UtilityCommands.INVSEE_PREFIX)) {
             return;
         }
 
-        String prefix = isArmor ? UtilityCommands.ARMOR_PREFIX : UtilityCommands.INVSEE_PREFIX;
-        String targetName = ChatColor.stripColor(title.substring(prefix.length())).trim();
+        // Cancel drag if it touches any gray glass pane
+        for (int rawSlot : event.getRawSlots()) {
+            if (rawSlot == 4 || (rawSlot >= 6 && rawSlot <= 17)) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+
+        String targetName = ChatColor.stripColor(title.substring(UtilityCommands.INVSEE_PREFIX.length())).trim();
         Player target = Bukkit.getPlayer(targetName);
         if (target != null && target.isOnline()) {
             Inventory top = event.getView().getTopInventory();
-            syncArmorToPlayer(top, target);
-            if (event.getPlayer() instanceof Player) {
-                ((Player) event.getPlayer()).updateInventory();
-            }
+            Bukkit.getScheduler().runTask(plugin, () -> UtilityCommands.syncGuiToTarget(top, target));
         }
     }
 
-    private void syncArmorToPlayer(Inventory top, Player target) {
-        if (top == null || target == null || !target.isOnline()) return;
+    @EventHandler
+    public void onInvseeClose(InventoryCloseEvent event) {
+        String title = event.getView().getTitle();
+        if (title == null || !title.startsWith(UtilityCommands.INVSEE_PREFIX)) {
+            return;
+        }
 
-        ItemStack boots = top.getItem(0);
-        ItemStack leggings = top.getItem(1);
-        ItemStack chestplate = top.getItem(2);
-        ItemStack helmet = top.getItem(3);
-        target.getInventory().setArmorContents(new ItemStack[]{boots, leggings, chestplate, helmet});
-
-        // Safe reflection for off-hand across 1.8.8 through 1.20+
-        try {
-            Method m = target.getInventory().getClass().getMethod("setItemInOffHand", ItemStack.class);
-            m.invoke(target.getInventory(), top.getItem(4));
-        } catch (Throwable ignored) {}
-
-        target.updateInventory();
+        String targetName = ChatColor.stripColor(title.substring(UtilityCommands.INVSEE_PREFIX.length())).trim();
+        Player target = Bukkit.getPlayer(targetName);
+        if (target != null && target.isOnline()) {
+            UtilityCommands.syncGuiToTarget(event.getView().getTopInventory(), target);
+        }
     }
 }

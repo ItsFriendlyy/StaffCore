@@ -5,6 +5,39 @@
 
 prefix: "&8[&cStaffCore&8] &r"
 
+# ========================================================
+#             BungeeCord & Network Settings
+#   Configure proxy connection and /sendserver support
+# ========================================================
+bungeecord:
+  # Enable BungeeCord plugin messaging channel support
+  enabled: true
+  # Identifier of this server instance on your Bungee/Velocity proxy
+  server-name: "lobby"
+  # Fallback server to connect players to if needed
+  fallback-server: "lobby"
+
+# ========================================================
+#       Database / MySQL (Network Synchronization)
+#   Synchronize bans, mutes, and stats across your proxy
+# ========================================================
+database:
+  # Set to true to store and sync punishments via MySQL across all proxy sub-servers
+  # If false, StaffCore stores data in local punishments.yml
+  mysql-enabled: false
+  host: "localhost"
+  port: 3306
+  database: "staffcore"
+  username: "root"
+  password: "your_password_here"
+  ssl: false
+  pool-size: 10
+  # Interval in seconds to automatically sync punishment cache from MySQL
+  sync-interval: 30
+
+# ========================================================
+#                  General Plugin Messages
+# ========================================================
 messages:
   no-permission: "&cYou do not have permission to execute this command!"
   player-not-found: "&cPlayer &e%target% &cwas not found or has never joined!"
@@ -21,6 +54,29 @@ messages:
   reload-success: "&aStaffCore configuration reloaded successfully."
   command-blocked-frozen: "&cYou cannot execute commands while frozen!"
   action-blocked-frozen: "&cYou cannot interact or break blocks while frozen!"
+  
+  # BungeeCord & Network Messages
+  bungee-disabled: "&cBungeeCord support is disabled in config.yml!"
+  sendserver-success: "&aSending &e%target% &ato server &e%server%&a..."
+  sendserver-failed: "&cFailed to send &e%target% &cto &e%server%&c."
+  sendserver-usage: "&cUsage: /sendserver <player> <server>"
+
+  # Utility Commands Messages
+  fly-enabled: "&aFly mode &2enabled &afor &e%target%&a."
+  fly-disabled: "&cFly mode &4disabled &cfor &e%target%&c."
+  speed-updated: "&aSpeed set to &e%speed% &afor &e%target%&a."
+  invincible-enabled: "&aInvincible mode &2enabled &afor &e%target%&a."
+  invincible-disabled: "&cInvincible mode &4disabled &cfor &e%target%&c."
+  gamemode-updated: "&aSet game mode to &e%gamemode% &afor &e%target%&a."
+  teleport-here: "&aTeleported &e%target% &ato your location."
+  teleport-all: "&aTeleported all players to your location."
+  enchant-success: "&aApplied &e%enchant% &alevel &e%level% &ato held item."
+  enchant-invalid: "&cInvalid enchantment or level! Levels can go up to 255."
+  heal-success: "&aFully healed &e%target%&a."
+  feed-success: "&aFully fed &e%target%&a."
+  repair-success: "&aSuccessfully repaired held item to full durability."
+  struck-success: "&aStruck lightning at &e%target%&a!"
+  sudo-success: "&aForced &e%target% &ato execute: &f%command%"
 
 # Screen messages shown to kicked / banned players
 screens:
@@ -104,7 +160,7 @@ staffchat:
 
 # Vanish settings
 vanish:
-  enabled: "&aYou are now vanished! (Hidden from players, tab list, &amp; server counter)"
+  enabled: "&aYou are now vanished! (Hidden from players, tab list, & server counter)"
   disabled: "&cYou are no longer vanished! You are now visible to everyone."
   staff-notify-vanish: "&8[&bVanish&8] &e%player% &7is now vanished."
   staff-notify-unvanish: "&8[&bVanish&8] &e%player% &7is now visible."
@@ -130,22 +186,3 @@ broadcasts:
     mute: "&8[&cSilent&8] &7%staff% permanently muted &e%target% &7for: &f%reason%"
     tempmute: "&8[&cSilent&8] &7%staff% temp-muted &e%target% &7for &e%duration% &7for: &f%reason%"
     warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%"
-# ========================================================
-#            MySQL Network Database Settings
-#  Connect multiple servers to the same database to sync bans
-# ========================================================
-database:
-  enabled: false
-  host: "localhost"
-  port: 3306
-  database: "staffcore"
-  username: "root"
-  password: "password"
-  use-ssl: false
-  table-prefix: "staffcore_"
-  # ========================================================
-#                  Update Checker
-# ========================================================
-update-checker:
-  enabled: true
-  notify-staff-on-join: true

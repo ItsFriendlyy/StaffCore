@@ -1,7 +1,7 @@
 name: StaffCore
-version: 1.0.2
+version: 1.0.3
 main: com.github.staffcore.StaffCore
-api-version: '1.20'
+api-version: 1.20
 author: StaffCoreDev
 description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, BungeeCord, and Utilities.
 
@@ -30,9 +30,9 @@ commands:
     usage: /unban <player>
     permission: staffcore.command.unban
   unbanip:
-    description: Unbans a banned IP address by player name or IP.
+    description: Unbans a banned IP address using player IGN or IP.
     aliases: [pardon-ip, pardonip, unban-ip]
-    usage: /unbanip <player|ip>
+    usage: /unbanip <player>
     permission: staffcore.command.unbanip
   mute:
     description: Permanently mutes a player.
@@ -99,7 +99,6 @@ commands:
     permission: staffcore.command.speed
   invincible:
     description: Makes a player invincible to all damage and hunger.
-    aliases: [god]
     usage: /invincible [player]
     permission: staffcore.command.invincible
   tphere:
@@ -111,17 +110,38 @@ commands:
     usage: /tpall [player | x y z]
     permission: staffcore.command.teleport
   invsee:
-    description: Inspects and edits another player's inventory, armor, and off-hand.
-    usage: /invsee <player> [armor]
+    description: Inspects and edits player inventory, armor, and off-hand in one unified GUI.
+    usage: /invsee <player>
     permission: staffcore.command.invsee
   enchant:
-    description: Applies an enchantment with levels exceeding vanilla limits (up to 32767).
-    usage: /enchant <enchantment> <level>
+    description: Adds an unsafe enchantment at any level (1-255) to the item in hand.
+    usage: /enchant <enchantment> [level (1-255)]
     permission: staffcore.command.enchant
   sendserver:
     description: Sends a player to another server via BungeeCord.
     usage: /sendserver <player> <server>
     permission: staffcore.command.sendserver
+  heal:
+    description: Fully restores health, hunger, saturation, and clears negative effects.
+    usage: /heal [player]
+    permission: staffcore.command.heal
+  feed:
+    description: Fully satisfies hunger and restores saturation.
+    usage: /feed [player]
+    permission: staffcore.command.feed
+  repair:
+    description: Restores the held item to full durability.
+    usage: /repair
+    permission: staffcore.command.repair
+  struck:
+    description: Strikes lightning at a target player or crosshair location.
+    aliases: [strike]
+    usage: /struck [player]
+    permission: staffcore.command.struck
+  sudo:
+    description: Forces a player to run a command or send a chat message.
+    usage: /sudo <player> <command | m:message>
+    permission: staffcore.command.sudo
 
 permissions:
   staffcore.command.ban:
@@ -189,6 +209,21 @@ permissions:
     default: op
   staffcore.command.sendserver:
     description: Allows sending players to other BungeeCord servers.
+    default: op
+  staffcore.command.heal:
+    description: Allows healing players.
+    default: op
+  staffcore.command.feed:
+    description: Allows feeding players.
+    default: op
+  staffcore.command.repair:
+    description: Allows repairing items.
+    default: op
+  staffcore.command.struck:
+    description: Allows striking lightning.
+    default: op
+  staffcore.command.sudo:
+    description: Allows forcing players to execute commands or chat messages.
     default: op
   staffcore.admin:
     description: Full administration permissions.
