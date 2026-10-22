@@ -97,7 +97,7 @@
                 </executions>
             </plugin>
 
-            <!-- Dual-Jar Builder: Cleanly builds Legacy and Modern Jars from Shaded Output -->
+            <!-- Dual-Jar Builder: Cleanly builds ONLY Legacy and Modern Jars -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
@@ -131,8 +131,9 @@
                                     <zipfileset file="${project.basedir}/src/main/resources/plugin-modern.yml" fullpath="plugin.yml"/>
                                 </jar>
 
-                                <!-- 3. Delete intermediate un-prefixed jar -->
+                                <!-- 3. Clean up intermediate jars created by Maven Shade -->
                                 <delete file="${project.build.directory}/${project.build.finalName}.jar" quiet="true"/>
+                                <delete file="${project.build.directory}/original-${project.build.finalName}.jar" quiet="true"/>
 
                                 <echo message="SUCCESS! Generated ONLY 2 jars in target:"/>
                                 <echo message="[+] target/StaffCore-${project.version}-Legacy.jar (For 1.8.8 - 1.12.2)"/>

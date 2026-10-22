@@ -17,6 +17,7 @@
       <zipfileset file="/workspaces/Friendly-s-Management-/src/main/resources/plugin-modern.yml" fullpath="plugin.yml" />
     </jar>
     <delete file="/workspaces/Friendly-s-Management-/target/StaffCore-1.0.4.jar" quiet="true" />
+    <delete file="/workspaces/Friendly-s-Management-/target/original-StaffCore-1.0.4.jar" quiet="true" />
     <echo message="SUCCESS! Generated ONLY 2 jars in target:" />
     <echo message="[+] target/StaffCore-1.0.4-Legacy.jar (For 1.8.8 - 1.12.2)" />
     <echo message="[+] target/StaffCore-1.0.4-Modern.jar (For 1.13 - 1.20+)" />
