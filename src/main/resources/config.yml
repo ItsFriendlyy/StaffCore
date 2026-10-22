@@ -42,7 +42,7 @@ bstats:
   # Enable anonymous bStats telemetry
   enabled: true
   # Your bStats Plugin ID from https://bstats.org (leave 0 if not set yet)
-  plugin-id: 0
+  plugin-id: 34872
 
 # ========================================================
 #                  General Plugin Messages
