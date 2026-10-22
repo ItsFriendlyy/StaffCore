@@ -36,6 +36,15 @@ database:
   sync-interval: 30
 
 # ========================================================
+#             bStats Metrics Telemetry
+# ========================================================
+bstats:
+  # Enable anonymous bStats telemetry
+  enabled: true
+  # Your bStats Plugin ID from https://bstats.org (leave 0 if not set yet)
+  plugin-id: 0
+
+# ========================================================
 #                  General Plugin Messages
 # ========================================================
 messages:

@@ -6,7 +6,7 @@
 
     <groupId>com.github</groupId>
     <artifactId>StaffCore</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
     <packaging>jar</packaging>
 
     <name>StaffCore</name>
@@ -50,6 +50,13 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <!-- Official bStats Metrics Dependency -->
+        <dependency>
+            <groupId>org.bstats</groupId>
+            <artifactId>bstats-bukkit</artifactId>
+            <version>3.2.1</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -66,14 +73,31 @@
                 </configuration>
             </plugin>
 
-            <!-- Base Jar Packager -->
+            <!-- Maven Shade Plugin: Packages and Relocates bStats -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.3.0</version>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.2</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <relocations>
+                                <relocation>
+                                    <pattern>org.bstats</pattern>
+                                    <shadedPattern>com.github.staffcore.bstats</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
-            <!-- Dual-Jar Builder: Cleanly builds ONLY Legacy and Modern Jars -->
+            <!-- Dual-Jar Builder: Cleanly builds Legacy and Modern Jars from Shaded Output -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
@@ -91,24 +115,24 @@
                                 <echo message="Building Clean StaffCore Legacy &amp; Modern Jars..."/>
                                 <echo message="===================================================="/>
 
-                                <!-- 1. Delete the default jar so target/ ONLY has Legacy and Modern -->
-                                <delete file="${project.build.directory}/${project.build.finalName}.jar" quiet="true"/>
-
-                                <!-- 2. Clean build Legacy Jar (< 1.13) from compiled classes -->
+                                <!-- 1. Clean build Legacy Jar (< 1.13) from shaded jar -->
                                 <jar destfile="${project.build.directory}/StaffCore-${project.version}-Legacy.jar">
-                                    <fileset dir="${project.build.outputDirectory}">
+                                    <zipfileset src="${project.build.directory}/${project.build.finalName}.jar">
                                         <exclude name="plugin*.yml"/>
-                                    </fileset>
+                                    </zipfileset>
                                     <zipfileset file="${project.basedir}/src/main/resources/plugin.yml" fullpath="plugin.yml"/>
                                 </jar>
 
-                                <!-- 3. Clean build Modern Jar (1.13 - 1.20+) with api-version: '1.20' -->
+                                <!-- 2. Clean build Modern Jar (1.13 - 1.20+) with api-version: '1.20' -->
                                 <jar destfile="${project.build.directory}/StaffCore-${project.version}-Modern.jar">
-                                    <fileset dir="${project.build.outputDirectory}">
+                                    <zipfileset src="${project.build.directory}/${project.build.finalName}.jar">
                                         <exclude name="plugin*.yml"/>
-                                    </fileset>
+                                    </zipfileset>
                                     <zipfileset file="${project.basedir}/src/main/resources/plugin-modern.yml" fullpath="plugin.yml"/>
                                 </jar>
+
+                                <!-- 3. Delete intermediate un-prefixed jar -->
+                                <delete file="${project.build.directory}/${project.build.finalName}.jar" quiet="true"/>
 
                                 <echo message="SUCCESS! Generated ONLY 2 jars in target:"/>
                                 <echo message="[+] target/StaffCore-${project.version}-Legacy.jar (For 1.8.8 - 1.12.2)"/>

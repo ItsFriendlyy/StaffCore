@@ -9,6 +9,7 @@ import com.github.staffcore.punishment.PunishmentManager;
 import com.github.staffcore.staffchat.StaffChatManager;
 import com.github.staffcore.util.UpdateChecker;
 import com.github.staffcore.vanish.VanishManager;
+import org.bstats.bukkit.Metrics;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -21,6 +22,8 @@ public final class StaffCore extends JavaPlugin {
     private StaffChatManager staffChatManager;
     private VanishManager vanishManager;
     private UpdateChecker updateChecker;
+
+    public static final int BSTATS_PLUGIN_ID = 34872;
 
     @Override
     public void onEnable() {
@@ -49,7 +52,20 @@ public final class StaffCore extends JavaPlugin {
         pm.registerEvents(this.updateChecker, this);
         this.updateChecker.checkForUpdates();
 
-        // 5. Register Commands & Tab Completers
+        // 5. Initialize bStats Metrics (ID: 34872)
+        try {
+            int bstatsId = getConfig().getInt("bstats.plugin-id", BSTATS_PLUGIN_ID);
+            if (bstatsId <= 0) {
+                bstatsId = BSTATS_PLUGIN_ID;
+            }
+            if (getConfig().getBoolean("bstats.enabled", true)) {
+                new Metrics(this, bstatsId);
+            }
+        } catch (Throwable t) {
+            getLogger().warning("Could not initialize bStats metrics: " + t.getMessage());
+        }
+
+        // 6. Register Commands & Tab Completers
         registerCommands();
 
         getLogger().info("StaffCore v" + getDescription().getVersion() + " enabled successfully! Ready for moderation.");
