@@ -1,5 +1,5 @@
 name: StaffCore
-version: 1.0.4
+version: 1.1
 main: com.github.staffcore.StaffCore
 api-version: 1.20
 author: StaffCoreDev
@@ -36,23 +36,23 @@ commands:
     permission: staffcore.command.unbanip
   mute:
     description: Permanently mutes a player.
-    usage: /mute <player> [reason] [-s]
+    usage: /mute <player|*> [reason] [-s]
     permission: staffcore.command.mute
   tempmute:
     description: Temporarily mutes a player.
-    usage: /tempmute <player> <duration> [reason] [-s]
+    usage: /tempmute <player|*> <duration> [reason] [-s]
     permission: staffcore.command.tempmute
   unmute:
     description: Unmutes a muted player.
-    usage: /unmute <player>
+    usage: /unmute <player|*>
     permission: staffcore.command.unmute
   warn:
     description: Warns a player.
-    usage: /warn <player> [reason] [-s]
+    usage: /warn <player|*> [reason] [-s]
     permission: staffcore.command.warn
   freeze:
     description: Toggles freeze on a player for staff inspection.
-    usage: /freeze <player>
+    usage: /freeze <player|*>
     permission: staffcore.command.freeze
   check:
     description: Opens an inspection GUI showing player stats and punishment history.
@@ -68,42 +68,42 @@ commands:
     usage: /vanish
     permission: staffcore.command.vanish
   staffcore:
-    description: Reloads plugin configuration.
-    usage: /staffcore reload
+    description: Reloads plugin configuration or checks for updates.
+    usage: /staffcore <reload|update>
     permission: staffcore.admin
 
   # Staff Utility Suite
   gmc:
     description: Switches game mode to Creative.
-    usage: /gmc [player]
+    usage: /gmc [player|*]
     permission: staffcore.command.gamemode
   gms:
     description: Switches game mode to Survival.
-    usage: /gms [player]
+    usage: /gms [player|*]
     permission: staffcore.command.gamemode
   gmsp:
     description: Switches game mode to Spectator.
-    usage: /gmsp [player]
+    usage: /gmsp [player|*]
     permission: staffcore.command.gamemode
   gma:
     description: Switches game mode to Adventure.
-    usage: /gma [player]
+    usage: /gma [player|*]
     permission: staffcore.command.gamemode
   fly:
     description: Toggles flight mode without changing game mode.
-    usage: /fly [player]
+    usage: /fly [player|*]
     permission: staffcore.command.fly
   speed:
     description: Sets walk or fly speed from 1 (normal) to 10 (fast).
-    usage: /speed <1-10> [player]
+    usage: /speed <1-10> [player|*]
     permission: staffcore.command.speed
   invincible:
     description: Makes a player invincible to all damage and hunger.
-    usage: /invincible [player]
+    usage: /invincible [player|*]
     permission: staffcore.command.invincible
   tphere:
     description: Teleports a player to your current location.
-    usage: /tphere <player>
+    usage: /tphere <player|*>
     permission: staffcore.command.teleport
   tpall:
     description: Teleports all online players to you or to coordinates.
@@ -119,15 +119,15 @@ commands:
     permission: staffcore.command.enchant
   sendserver:
     description: Sends a player to another server via BungeeCord.
-    usage: /sendserver <player> <server>
+    usage: /sendserver <player|*> <server>
     permission: staffcore.command.sendserver
   heal:
     description: Fully restores health, hunger, saturation, and clears negative effects.
-    usage: /heal [player]
+    usage: /heal [player|*]
     permission: staffcore.command.heal
   feed:
     description: Fully satisfies hunger and restores saturation.
-    usage: /feed [player]
+    usage: /feed [player|*]
     permission: staffcore.command.feed
   repair:
     description: Restores the held item to full durability.
@@ -136,12 +136,30 @@ commands:
   struck:
     description: Strikes lightning at a target player or crosshair location.
     aliases: [strike]
-    usage: /struck [player]
+    usage: /struck [player|*]
     permission: staffcore.command.struck
   sudo:
     description: Forces a player to run a command or send a chat message.
-    usage: /sudo <player> <command | m:message>
+    usage: /sudo <player|*> <command | m:message>
     permission: staffcore.command.sudo
+  give:
+    description: Gives an item to a player or all online players.
+    usage: /give <player|*> <item> [amount]
+    permission: staffcore.command.give
+  effect:
+    description: Applies or clears potion effects on a player or all online players.
+    usage: /effect <player|*> <potion|clear> [seconds] [level]
+    permission: staffcore.command.effect
+  cleargrounditems:
+    description: Clears all dropped items on the ground across all worlds.
+    aliases: [cleargrouditems, clearitems, clearlag]
+    usage: /cleargrounditems
+    permission: staffcore.command.cleargrounditems
+  clear:
+    description: Clears a player's inventory, armor, and off-hand.
+    aliases: [ci, clearinventory]
+    usage: /clear [player|*]
+    permission: staffcore.command.clear
 
 permissions:
   staffcore.command.ban:
@@ -224,6 +242,18 @@ permissions:
     default: op
   staffcore.command.sudo:
     description: Allows forcing players to execute commands or chat messages.
+    default: op
+  staffcore.command.give:
+    description: Allows giving items to players.
+    default: op
+  staffcore.command.effect:
+    description: Allows applying or clearing potion effects on players.
+    default: op
+  staffcore.command.cleargrounditems:
+    description: Allows clearing dropped items from the ground.
+    default: op
+  staffcore.command.clear:
+    description: Allows clearing player inventories.
     default: op
   staffcore.admin:
     description: Full administration permissions.

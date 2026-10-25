@@ -41,7 +41,7 @@ database:
 bstats:
   # Enable anonymous bStats telemetry
   enabled: true
-  # Your bStats Plugin ID from https://bstats.org (leave 0 if not set yet)
+  # Your bStats Plugin ID from https://bstats.org
   plugin-id: 34872
 
 # ========================================================
@@ -60,15 +60,15 @@ messages:
   ip-not-banned: "&cIP address &e%ip% &cis not banned!"
   unmute-success: "&aSuccessfully unmuted &e%target%&a."
   not-muted: "&cPlayer &e%target% &cis not muted!"
-  reload-success: "&aStaffCore configuration reloaded successfully."
+  reload-success: "&aStaffCore configuration and data reloaded successfully!"
   command-blocked-frozen: "&cYou cannot execute commands while frozen!"
   action-blocked-frozen: "&cYou cannot interact or break blocks while frozen!"
-  
+
   # BungeeCord & Network Messages
   bungee-disabled: "&cBungeeCord support is disabled in config.yml!"
   sendserver-success: "&aSending &e%target% &ato server &e%server%&a..."
   sendserver-failed: "&cFailed to send &e%target% &cto &e%server%&c."
-  sendserver-usage: "&cUsage: /sendserver <player> <server>"
+  sendserver-usage: "&cUsage: /sendserver <player|*> <server>"
 
   # Utility Commands Messages
   fly-enabled: "&aFly mode &2enabled &afor &e%target%&a."
@@ -135,11 +135,14 @@ mute:
     - "&7Remaining time: &e%remaining%"
     - "&c&m--------------------------------------------------"
 
-# Warning messages
+# Warning system & auto-ban settings
 warning:
+  # Number of active warnings before a player is automatically permanently banned
+  # The final warning's reason will be used as the ban reason (set to 0 to disable auto-ban)
+  max-warnings: 3
   received:
     - "&6&m--------------------------------------------------"
-    - "&6&lWARNING RECEIVED!"
+    - "&6&lWARNING RECEIVED! &e(%count%/%max%)"
     - "&7You have been warned by &f%staff%&7!"
     - "&7Reason: &f%reason%"
     - "&7Please follow the server rules to avoid further punishment."

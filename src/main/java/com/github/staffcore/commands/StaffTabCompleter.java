@@ -2,12 +2,14 @@ package com.github.staffcore.commands;
 
 import com.github.staffcore.StaffCore;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.StringUtil;
 
 import java.util.*;
@@ -18,6 +20,7 @@ public class StaffTabCompleter implements TabCompleter {
     private static final List<String> DURATIONS = Arrays.asList("30m", "1h", "2h", "12h", "1d", "7d", "30d", "permanent");
     private static final List<String> REASONS = Arrays.asList("Cheating/Hacking", "Toxic Behavior", "Spamming", "Advertising", "Griefing", "Staff Disrespect");
     private static final List<String> CHAT_SUBS = Arrays.asList("staff", "all", "global");
+    private static final List<String> STAFFCORE_SUBS = Arrays.asList("reload", "update");
 
     public StaffTabCompleter() {
         this(JavaPlugin.getPlugin(StaffCore.class));
@@ -32,6 +35,15 @@ public class StaffTabCompleter implements TabCompleter {
         List<String> completions = new ArrayList<>();
         String cmd = command.getName().toLowerCase();
 
+        // 0. /staffcore
+        if (cmd.equals("staffcore")) {
+            if (args.length == 1) {
+                StringUtil.copyPartialMatches(args[0], STAFFCORE_SUBS, completions);
+                Collections.sort(completions);
+            }
+            return completions;
+        }
+
         // 1. /chat
         if (cmd.equals("chat")) {
             if (args.length == 1) {
@@ -40,8 +52,9 @@ public class StaffTabCompleter implements TabCompleter {
             return completions;
         }
 
-        // 2. /vanish
-        if (cmd.equals("vanish") || cmd.equals("v")) {
+        // 2. /vanish, /repair, /cleargrounditems
+        if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") ||
+            cmd.equals("cleargrounditems") || cmd.equals("cleargrouditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
             return Collections.emptyList();
         }
 
@@ -79,27 +92,82 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 4. /speed tab completion
+        // 4. /give <player|*> <item> [amount]
+        if (cmd.equals("give")) {
+            if (args.length == 1) {
+                return getPlayerNameCompletions(args[0], true);
+            } else if (args.length == 2) {
+                Set<String> itemNames = new TreeSet<>();
+                for (Material m : Material.values()) {
+                    if (m != Material.AIR) {
+                        itemNames.add(m.name().toLowerCase());
+                    }
+                }
+                itemNames.addAll(Arrays.asList("golden_apple", "enchanted_golden_apple", "totem_of_undying", "ender_pearl", "experience_bottle", "command_block", "steak"));
+                StringUtil.copyPartialMatches(args[1].toLowerCase(), itemNames, completions);
+                return completions;
+            } else if (args.length == 3) {
+                List<String> amounts = Arrays.asList("1", "16", "32", "64");
+                StringUtil.copyPartialMatches(args[2], amounts, completions);
+                return completions;
+            }
+            return Collections.emptyList();
+        }
+
+        // 5. /effect <player|*> <potion|clear> [seconds] [level]
+        if (cmd.equals("effect")) {
+            if (args.length == 1) {
+                return getPlayerNameCompletions(args[0], true);
+            } else if (args.length == 2) {
+                Set<String> effects = new TreeSet<>();
+                effects.add("clear");
+                for (PotionEffectType pet : PotionEffectType.values()) {
+                    if (pet != null && pet.getName() != null) {
+                        effects.add(pet.getName().toLowerCase());
+                    }
+                }
+                effects.addAll(Arrays.asList(
+                    "speed", "slowness", "haste", "mining_fatigue", "strength", "instant_health",
+                    "instant_damage", "jump_boost", "nausea", "regeneration", "resistance",
+                    "fire_resistance", "water_breathing", "invisibility", "blindness", "night_vision",
+                    "hunger", "weakness", "poison", "wither", "health_boost", "absorption", "saturation",
+                    "glowing", "levitation", "slow_falling", "conduit_power", "dolphins_grace", "darkness"
+                ));
+                StringUtil.copyPartialMatches(args[1].toLowerCase(), effects, completions);
+                return completions;
+            } else if (args.length == 3 && !args[1].equalsIgnoreCase("clear")) {
+                List<String> secs = Arrays.asList("30", "60", "120", "300", "600", "3600");
+                StringUtil.copyPartialMatches(args[2], secs, completions);
+                return completions;
+            } else if (args.length == 4 && !args[1].equalsIgnoreCase("clear")) {
+                List<String> levels = Arrays.asList("1", "2", "3", "4", "5", "10", "255");
+                StringUtil.copyPartialMatches(args[3], levels, completions);
+                return completions;
+            }
+            return Collections.emptyList();
+        }
+
+        // 6. /speed tab completion
         if (cmd.equals("speed")) {
             if (args.length == 1) {
                 List<String> speeds = Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
                 StringUtil.copyPartialMatches(args[0], speeds, completions);
                 return completions;
             } else if (args.length == 2) {
-                return getPlayerNameCompletions(args[1]);
+                return getPlayerNameCompletions(args[1], true);
             }
             return Collections.emptyList();
         }
 
-        // 5. /invsee tab completion (Unified single GUI - player names only)
-        if (cmd.equals("invsee")) {
+        // 7. /invsee and /check (Single player only, no wildcard *)
+        if (cmd.equals("invsee") || cmd.equals("check") || cmd.equals("tpall")) {
             if (args.length == 1) {
-                return getPlayerNameCompletions(args[0]);
+                return getPlayerNameCompletions(args[0], false);
             }
             return Collections.emptyList();
         }
 
-        // 6. /unban and /pardon tab completion directly from ban list (NOT online players)
+        // 8. /unban and /pardon tab completion directly from ban list
         if (cmd.equals("unban") || cmd.equals("pardon")) {
             if (args.length == 1) {
                 return getBannedPlayerCompletions(args[0]);
@@ -107,7 +175,7 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 7. /unbanip tab completion directly from active IP bans
+        // 9. /unbanip tab completion directly from active IP bans
         if (cmd.equals("unbanip") || cmd.equals("unban-ip") || cmd.equals("pardon-ip") || cmd.equals("pardonip")) {
             if (args.length == 1) {
                 return getIpBannedCompletions(args[0]);
@@ -115,10 +183,10 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 8. /sudo tab completion
+        // 10. /sudo tab completion (with *)
         if (cmd.equals("sudo")) {
             if (args.length == 1) {
-                return getPlayerNameCompletions(args[0]);
+                return getPlayerNameCompletions(args[0], true);
             } else if (args.length == 2) {
                 List<String> suggestions = Arrays.asList("m:", "spawn", "help", "msg");
                 StringUtil.copyPartialMatches(args[1], suggestions, completions);
@@ -127,22 +195,33 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 9. Utility player commands and unmute: heal, feed, struck, strike, freeze, check, unmute, fly, invincible, gmc, gms, gma, gmsp, tphere
-        if (cmd.equals("heal") || cmd.equals("feed") || cmd.equals("struck") || cmd.equals("strike") ||
-            cmd.equals("freeze") || cmd.equals("check") || cmd.equals("unmute") ||
-            cmd.equals("fly") || cmd.equals("invincible") ||
-            cmd.equals("gmc") || cmd.equals("gms") || cmd.equals("gma") || cmd.equals("gmsp") || cmd.equals("tphere")) {
+        // 11. /sendserver tab completion (with *)
+        if (cmd.equals("sendserver")) {
             if (args.length == 1) {
-                return getPlayerNameCompletions(args[0]);
+                return getPlayerNameCompletions(args[0], true);
+            } else if (args.length == 2) {
+                List<String> servers = Arrays.asList("lobby", "hub", "survival", "skyblock");
+                StringUtil.copyPartialMatches(args[1], servers, completions);
+                return completions;
             }
             return Collections.emptyList();
         }
 
-        // 10. /ban, /ipban, /ban-ip, /banip, /mute, /warn
-        if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("ban-ip") || cmd.equals("banip") ||
-            cmd.equals("mute") || cmd.equals("warn")) {
+        // 12. Utility player commands supporting *: heal, feed, struck, strike, freeze, unmute, fly, invincible, gmc, gms, gma, gmsp, tphere, clear
+        if (cmd.equals("heal") || cmd.equals("feed") || cmd.equals("struck") || cmd.equals("strike") ||
+            cmd.equals("freeze") || cmd.equals("unmute") || cmd.equals("fly") || cmd.equals("invincible") ||
+            cmd.equals("gmc") || cmd.equals("gms") || cmd.equals("gma") || cmd.equals("gmsp") || cmd.equals("tphere") ||
+            cmd.equals("clear") || cmd.equals("ci") || cmd.equals("clearinventory")) {
             if (args.length == 1) {
-                return getPlayerNameCompletions(args[0]);
+                return getPlayerNameCompletions(args[0], true);
+            }
+            return Collections.emptyList();
+        }
+
+        // 13. /mute, /warn (support *)
+        if (cmd.equals("mute") || cmd.equals("warn")) {
+            if (args.length == 1) {
+                return getPlayerNameCompletions(args[0], true);
             } else if (args.length == 2) {
                 List<String> options = new ArrayList<>(REASONS);
                 options.add("-s");
@@ -156,10 +235,47 @@ public class StaffTabCompleter implements TabCompleter {
             }
         }
 
-        // 11. /tempban, /tempipban, /tempban-ip, /tempbanip, /tempmute
-        if (cmd.equals("tempban") || cmd.equals("tempipban") || cmd.equals("tempban-ip") || cmd.equals("tempbanip") || cmd.equals("tempmute")) {
+        // 14. /tempmute (supports *)
+        if (cmd.equals("tempmute")) {
             if (args.length == 1) {
-                return getPlayerNameCompletions(args[0]);
+                return getPlayerNameCompletions(args[0], true);
+            } else if (args.length == 2) {
+                StringUtil.copyPartialMatches(args[1], DURATIONS, completions);
+                return completions;
+            } else if (args.length == 3) {
+                List<String> options = new ArrayList<>(REASONS);
+                options.add("-s");
+                StringUtil.copyPartialMatches(args[2], options, completions);
+                return completions;
+            } else {
+                if (!args[args.length - 2].equalsIgnoreCase("-s")) {
+                    StringUtil.copyPartialMatches(args[args.length - 1], Collections.singletonList("-s"), completions);
+                }
+                return completions;
+            }
+        }
+
+        // 15. /ban, /ipban, /ban-ip, /banip (single target, no *)
+        if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("ban-ip") || cmd.equals("banip")) {
+            if (args.length == 1) {
+                return getPlayerNameCompletions(args[0], false);
+            } else if (args.length == 2) {
+                List<String> options = new ArrayList<>(REASONS);
+                options.add("-s");
+                StringUtil.copyPartialMatches(args[1], options, completions);
+                return completions;
+            } else {
+                if (!args[args.length - 2].equalsIgnoreCase("-s")) {
+                    StringUtil.copyPartialMatches(args[args.length - 1], Collections.singletonList("-s"), completions);
+                }
+                return completions;
+            }
+        }
+
+        // 16. /tempban, /tempipban, /tempban-ip, /tempbanip (single target, no *)
+        if (cmd.equals("tempban") || cmd.equals("tempipban") || cmd.equals("tempban-ip") || cmd.equals("tempbanip")) {
+            if (args.length == 1) {
+                return getPlayerNameCompletions(args[0], false);
             } else if (args.length == 2) {
                 StringUtil.copyPartialMatches(args[1], DURATIONS, completions);
                 return completions;
@@ -179,8 +295,11 @@ public class StaffTabCompleter implements TabCompleter {
         return completions;
     }
 
-    private List<String> getPlayerNameCompletions(String prefix) {
+    private List<String> getPlayerNameCompletions(String prefix, boolean includeWildcard) {
         List<String> names = new ArrayList<>();
+        if (includeWildcard) {
+            names.add("*");
+        }
         for (Player p : Bukkit.getOnlinePlayers()) {
             names.add(p.getName());
         }
@@ -193,7 +312,6 @@ public class StaffTabCompleter implements TabCompleter {
     private List<String> getBannedPlayerCompletions(String prefix) {
         Set<String> banned = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
-        // 1. StaffCore internal active bans
         try {
             StaffCore core = (this.plugin != null) ? this.plugin : JavaPlugin.getPlugin(StaffCore.class);
             if (core != null && core.getPunishmentManager() != null) {
@@ -201,7 +319,6 @@ public class StaffTabCompleter implements TabCompleter {
             }
         } catch (Throwable ignored) {}
 
-        // 2. Bukkit native BanList (BanList.Type.NAME)
         try {
             for (org.bukkit.BanEntry entry : Bukkit.getBanList(org.bukkit.BanList.Type.NAME).getBanEntries()) {
                 if (entry != null && entry.getTarget() != null) {
@@ -210,7 +327,6 @@ public class StaffTabCompleter implements TabCompleter {
             }
         } catch (Throwable ignored) {}
 
-        // 3. Bukkit getBannedPlayers() for older Spigot compatibility
         try {
             for (org.bukkit.OfflinePlayer op : Bukkit.getBannedPlayers()) {
                 if (op != null && op.getName() != null) {
@@ -228,7 +344,6 @@ public class StaffTabCompleter implements TabCompleter {
     private List<String> getIpBannedCompletions(String prefix) {
         Set<String> ipBanned = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
-        // 1. StaffCore internal active IP bans
         try {
             StaffCore core = (this.plugin != null) ? this.plugin : JavaPlugin.getPlugin(StaffCore.class);
             if (core != null && core.getPunishmentManager() != null) {
@@ -236,7 +351,6 @@ public class StaffTabCompleter implements TabCompleter {
             }
         } catch (Throwable ignored) {}
 
-        // 2. Bukkit native BanList (BanList.Type.IP)
         try {
             for (org.bukkit.BanEntry entry : Bukkit.getBanList(org.bukkit.BanList.Type.IP).getBanEntries()) {
                 if (entry != null && entry.getTarget() != null) {

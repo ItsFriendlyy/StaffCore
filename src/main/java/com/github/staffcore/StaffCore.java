@@ -10,6 +10,7 @@ import com.github.staffcore.staffchat.StaffChatManager;
 import com.github.staffcore.util.UpdateChecker;
 import com.github.staffcore.vanish.VanishManager;
 import org.bstats.bukkit.Metrics;
+import org.bukkit.ChatColor;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -36,6 +37,9 @@ public final class StaffCore extends JavaPlugin {
         this.staffChatManager = new StaffChatManager(this);
         this.vanishManager = new VanishManager(this);
 
+        // Load persistent utility states (/fly, /speed, /invincible)
+        UtilityCommands.loadStates(this);
+
         // 2. Register BungeeCord Plugin Messaging Channel
         getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
 
@@ -44,7 +48,7 @@ public final class StaffCore extends JavaPlugin {
         pm.registerEvents(new PunishmentListener(this), this);
         pm.registerEvents(new FreezeListener(this), this);
         pm.registerEvents(new VanishListener(this), this);
-        pm.registerEvents(new GuiListener(), this);
+        pm.registerEvents(new GuiListener(this), this);
         pm.registerEvents(new UtilityListener(this), this);
 
         // 4. Asynchronous GitHub Release Update Checker
@@ -52,7 +56,7 @@ public final class StaffCore extends JavaPlugin {
         pm.registerEvents(this.updateChecker, this);
         this.updateChecker.checkForUpdates();
 
-        // 5. Initialize bStats Metrics (ID: 34872)
+        // 5. Initialize bStats Metrics
         try {
             int bstatsId = getConfig().getInt("bstats.plugin-id", BSTATS_PLUGIN_ID);
             if (bstatsId <= 0) {
@@ -60,6 +64,9 @@ public final class StaffCore extends JavaPlugin {
             }
             if (getConfig().getBoolean("bstats.enabled", true)) {
                 new Metrics(this, bstatsId);
+                getLogger().info("bStats metrics enabled (Plugin ID: " + bstatsId + ")");
+            } else {
+                getLogger().info("bStats metrics is disabled in config.yml.");
             }
         } catch (Throwable t) {
             getLogger().warning("Could not initialize bStats metrics: " + t.getMessage());
@@ -73,6 +80,8 @@ public final class StaffCore extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        UtilityCommands.saveStates(this);
+
         if (freezeManager != null) {
             freezeManager.stop();
         }
@@ -104,7 +113,12 @@ public final class StaffCore extends JavaPlugin {
 
         // Staff Utilities
         UtilityCommands utilExecutor = new UtilityCommands(this);
-        String[] utilCmds = {"gmc", "gms", "gmsp", "gma", "fly", "speed", "invincible", "tphere", "tpall", "invsee", "enchant", "sendserver", "heal", "feed", "repair", "struck", "sudo"};
+        String[] utilCmds = {
+            "gmc", "gms", "gmsp", "gma", "fly", "speed", "invincible",
+            "tphere", "tpall", "invsee", "enchant", "sendserver",
+            "heal", "feed", "repair", "struck", "sudo",
+            "give", "effect", "cleargrounditems", "clear"
+        };
         for (String cmdName : utilCmds) {
             PluginCommand cmd = getCommand(cmdName);
             if (cmd != null) {
@@ -141,16 +155,32 @@ public final class StaffCore extends JavaPlugin {
             vanishCmd.setTabCompleter(tabCompleter);
         }
 
-        // StaffCore Admin Command
+        // StaffCore Admin Command (/staffcore reload | /staffcore update)
         PluginCommand adminCmd = getCommand("staffcore");
         if (adminCmd != null) {
+            adminCmd.setTabCompleter(tabCompleter);
             adminCmd.setExecutor((sender, command, label, args) -> {
                 if (args.length > 0) {
                     if (args[0].equalsIgnoreCase("reload")) {
-                        reloadConfig();
-                        punishmentManager.loadData();
-                        sender.sendMessage(messageManager.getPrefixedMessage("messages.reload-success"));
-                        updateChecker.checkForUpdates(sender);
+                        try {
+                            saveDefaultConfig();
+                            reloadConfig();
+                            punishmentManager.loadData();
+                            UtilityCommands.loadStates(this);
+
+                            String rawReloadMsg = getConfig().getString("messages.reload-success");
+                            if (rawReloadMsg == null || ChatColor.stripColor(messageManager.color(rawReloadMsg)).trim().isEmpty()) {
+                                rawReloadMsg = "&aStaffCore configuration and data reloaded successfully!";
+                            }
+                            String prefix = messageManager.getPrefix();
+                            if (prefix == null || ChatColor.stripColor(prefix).trim().isEmpty()) {
+                                prefix = ChatColor.translateAlternateColorCodes('&', "&8[&cStaffCore&8] &r");
+                            }
+                            sender.sendMessage(prefix + messageManager.color(rawReloadMsg));
+                        } catch (Exception e) {
+                            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                                    "&8[&cStaffCore&8] &cFailed to reload configuration: " + e.getMessage()));
+                        }
                         return true;
                     }
                     if (args[0].equalsIgnoreCase("update") || args[0].equalsIgnoreCase("version") || args[0].equalsIgnoreCase("checkupdate")) {
@@ -158,7 +188,7 @@ public final class StaffCore extends JavaPlugin {
                         return true;
                     }
                 }
-                sender.sendMessage(messageManager.color("&cUsage: /staffcore <reload | update>"));
+                sender.sendMessage(messageManager.color("&8[&cStaffCore&8] &cUsage: /staffcore <reload | update>"));
                 return true;
             });
         }

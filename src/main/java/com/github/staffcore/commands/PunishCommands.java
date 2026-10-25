@@ -139,7 +139,7 @@ public class PunishCommands implements CommandExecutor {
     private boolean handleMute(CommandSender sender, String[] args, boolean temporary) {
         int minArgs = temporary ? 2 : 1;
         if (args.length < minArgs) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /" + (temporary ? "tempmute" : "mute") + " <player> " + (temporary ? "<duration> " : "") + "[reason] [-s]"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /" + (temporary ? "tempmute" : "mute") + " <player|*> " + (temporary ? "<duration> " : "") + "[reason] [-s]"));
             return true;
         }
 
@@ -157,6 +157,20 @@ public class PunishCommands implements CommandExecutor {
         }
 
         ParsedReason parsed = parseSilentAndReason(args, reasonStartIndex);
+        PunishmentType type = temporary ? PunishmentType.TEMP_MUTE : PunishmentType.MUTE;
+
+        if (targetInput.equals("*")) {
+            int count = 0;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (sender instanceof Player && p.equals(sender)) continue;
+                if (p.hasPermission("staffcore.bypass.mute") || p.isOp()) continue;
+                plugin.getPunishmentManager().createPunishment(
+                        p.getUniqueId(), p.getName(), "", sender.getName(), type, parsed.reason, duration, parsed.silent);
+                count++;
+            }
+            sender.sendMessage(plugin.getMessageManager().color("&aMuted &e" + count + " &aonline players."));
+            return true;
+        }
 
         String targetName = targetInput;
         UUID targetUUID = null;
@@ -186,7 +200,6 @@ public class PunishCommands implements CommandExecutor {
             }
         }
 
-        PunishmentType type = temporary ? PunishmentType.TEMP_MUTE : PunishmentType.MUTE;
         plugin.getPunishmentManager().createPunishment(
                 targetUUID, targetName, "", sender.getName(), type, parsed.reason, duration, parsed.silent);
         return true;
@@ -194,20 +207,39 @@ public class PunishCommands implements CommandExecutor {
 
     private boolean handleWarn(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /warn <player> [reason] [-s]"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /warn <player|*> [reason] [-s]"));
             return true;
         }
 
         String targetInput = args[0];
         ParsedReason parsed = parseSilentAndReason(args, 1);
 
+        if (targetInput.equals("*")) {
+            int count = 0;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (sender instanceof Player && p.equals(sender)) continue;
+                if (p.hasPermission("staffcore.bypass.warn") || p.isOp()) continue;
+                String ip = (p.getAddress() != null && p.getAddress().getAddress() != null)
+                        ? p.getAddress().getAddress().getHostAddress() : "";
+                plugin.getPunishmentManager().createPunishment(
+                        p.getUniqueId(), p.getName(), ip, sender.getName(), PunishmentType.WARN, parsed.reason, -1, parsed.silent);
+                count++;
+            }
+            sender.sendMessage(plugin.getMessageManager().color("&aWarned &e" + count + " &aonline players."));
+            return true;
+        }
+
         String targetName = targetInput;
+        String targetIp = "";
         UUID targetUUID = null;
 
         Player onlineTarget = Bukkit.getPlayer(targetInput);
         if (onlineTarget != null) {
             targetUUID = onlineTarget.getUniqueId();
             targetName = onlineTarget.getName();
+            if (onlineTarget.getAddress() != null && onlineTarget.getAddress().getAddress() != null) {
+                targetIp = onlineTarget.getAddress().getAddress().getHostAddress();
+            }
 
             if (onlineTarget.hasPermission("staffcore.bypass.warn") || onlineTarget.isOp()) {
                 sender.sendMessage(plugin.getMessageManager().color(
@@ -221,6 +253,7 @@ public class PunishCommands implements CommandExecutor {
             if (offlineTarget.hasPlayedBefore() || offlineTarget.isOnline()) {
                 targetUUID = offlineTarget.getUniqueId();
                 targetName = offlineTarget.getName() != null ? offlineTarget.getName() : targetInput;
+                targetIp = plugin.getPunishmentManager().getLastKnownIp(targetUUID);
             } else {
                 sender.sendMessage(plugin.getMessageManager().color(
                         plugin.getConfig().getString("messages.player-not-found", "&cPlayer not found!")
@@ -230,7 +263,7 @@ public class PunishCommands implements CommandExecutor {
         }
 
         plugin.getPunishmentManager().createPunishment(
-                targetUUID, targetName, "", sender.getName(), PunishmentType.WARN, parsed.reason, -1, parsed.silent);
+                targetUUID, targetName, targetIp != null ? targetIp : "", sender.getName(), PunishmentType.WARN, parsed.reason, -1, parsed.silent);
         return true;
     }
 
@@ -259,31 +292,40 @@ public class PunishCommands implements CommandExecutor {
 
     private boolean handleUnbanIp(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unbanip <player|ip>"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unbanip <player>"));
             return true;
         }
 
-        String target = args[0];
-        boolean success = plugin.getPunishmentManager().unbanIp(target);
-        if (success) {
+        String targetIgn = args[0];
+        String unbannedIp = plugin.getPunishmentManager().unbanIpByIgn(targetIgn);
+        if (unbannedIp != null) {
             sender.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("messages.unbanip-success", "&aSuccessfully unbanned IP for &e%target%&a.")
-                            .replace("%ip%", target).replace("%target%", target)));
+                    "&aSuccessfully unbanned IP for &e" + targetIgn + " &7(" + unbannedIp + ")&a."));
         } else {
             sender.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("messages.ip-not-banned", "&cNo active IP ban found for &e%target%&c!")
-                            .replace("%ip%", target).replace("%target%", target)));
+                    "&cNo active IP ban found for player &e" + targetIgn + "&c!"));
         }
         return true;
     }
 
     private boolean handleUnmute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unmute <player>"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unmute <player|*>"));
             return true;
         }
 
         String targetInput = args[0];
+        if (targetInput.equals("*")) {
+            int count = 0;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (plugin.getPunishmentManager().unmute(p.getUniqueId())) {
+                    count++;
+                }
+            }
+            sender.sendMessage(plugin.getMessageManager().color("&aUnmuted &e" + count + " &aonline players."));
+            return true;
+        }
+
         @SuppressWarnings("deprecation")
         OfflinePlayer target = Bukkit.getOfflinePlayer(targetInput);
 

@@ -6,27 +6,38 @@ import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public class UtilityCommands implements CommandExecutor {
 
     private final StaffCore plugin;
     public static final Set<UUID> invinciblePlayers = new HashSet<>();
+    public static final Set<UUID> flyPlayers = new HashSet<>();
+    public static final Map<UUID, Float> walkSpeeds = new HashMap<>();
+    public static final Map<UUID, Float> flySpeeds = new HashMap<>();
+
     public static final String INVSEE_PREFIX = ChatColor.DARK_GRAY + "Invsee: " + ChatColor.DARK_RED;
     public static final String ARMOR_PREFIX = ChatColor.DARK_GRAY + "Armor: " + ChatColor.DARK_RED;
 
@@ -43,6 +54,99 @@ public class UtilityCommands implements CommandExecutor {
             invinciblePlayers.add(uuid);
         } else {
             invinciblePlayers.remove(uuid);
+        }
+    }
+
+    public static boolean isFlyEnabled(UUID uuid) {
+        return flyPlayers.contains(uuid);
+    }
+
+    public static void setFlyEnabled(UUID uuid, boolean state) {
+        if (state) {
+            flyPlayers.add(uuid);
+        } else {
+            flyPlayers.remove(uuid);
+        }
+    }
+
+    public static void loadStates(StaffCore plugin) {
+        if (plugin == null) return;
+        File file = new File(plugin.getDataFolder(), "states.yml");
+        if (!file.exists()) return;
+
+        FileConfiguration data = YamlConfiguration.loadConfiguration(file);
+        invinciblePlayers.clear();
+        flyPlayers.clear();
+        walkSpeeds.clear();
+        flySpeeds.clear();
+
+        for (String s : data.getStringList("invincible")) {
+            try {
+                invinciblePlayers.add(UUID.fromString(s));
+            } catch (Exception ignored) {}
+        }
+
+        for (String s : data.getStringList("fly")) {
+            try {
+                flyPlayers.add(UUID.fromString(s));
+            } catch (Exception ignored) {}
+        }
+
+        ConfigurationSection walkSec = data.getConfigurationSection("walk-speed");
+        if (walkSec != null) {
+            for (String key : walkSec.getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(key);
+                    float speed = (float) walkSec.getDouble(key, 0.2);
+                    walkSpeeds.put(uuid, speed);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        ConfigurationSection flySec = data.getConfigurationSection("fly-speed");
+        if (flySec != null) {
+            for (String key : flySec.getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(key);
+                    float speed = (float) flySec.getDouble(key, 0.1);
+                    flySpeeds.put(uuid, speed);
+                } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    public static void saveStates(StaffCore plugin) {
+        if (plugin == null) return;
+        if (!plugin.getDataFolder().exists()) {
+            plugin.getDataFolder().mkdirs();
+        }
+        File file = new File(plugin.getDataFolder(), "states.yml");
+        FileConfiguration data = new YamlConfiguration();
+
+        List<String> invList = new ArrayList<>();
+        for (UUID uuid : invinciblePlayers) {
+            invList.add(uuid.toString());
+        }
+        data.set("invincible", invList);
+
+        List<String> flyList = new ArrayList<>();
+        for (UUID uuid : flyPlayers) {
+            flyList.add(uuid.toString());
+        }
+        data.set("fly", flyList);
+
+        for (Map.Entry<UUID, Float> entry : walkSpeeds.entrySet()) {
+            data.set("walk-speed." + entry.getKey().toString(), entry.getValue());
+        }
+
+        for (Map.Entry<UUID, Float> entry : flySpeeds.entrySet()) {
+            data.set("fly-speed." + entry.getKey().toString(), entry.getValue());
+        }
+
+        try {
+            data.save(file);
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not save states.yml: " + e.getMessage());
         }
     }
 
@@ -67,13 +171,12 @@ public class UtilityCommands implements CommandExecutor {
         ItemStack pane = createGrayPane();
 
         // Row 0: Equipment (Slots 0 to 8)
-        // Armor (Slots 0 to 3: Helmet, Chestplate, Leggings, Boots)
         gui.setItem(0, target.getInventory().getHelmet());
         gui.setItem(1, target.getInventory().getChestplate());
         gui.setItem(2, target.getInventory().getLeggings());
         gui.setItem(3, target.getInventory().getBoots());
 
-        // Slot 4: One slot/item frame spacer between Armor and Off-Hand
+        // Slot 4: Spacer between Armor and Off-Hand
         gui.setItem(4, pane);
 
         // Slot 5: Off-Hand item (Reflection for 1.9+ servers)
@@ -106,7 +209,7 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         staff.openInventory(gui);
-        staff.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+        staff.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 "&aOpened inventory of &e" + target.getName() + "&a."));
     }
 
@@ -142,7 +245,7 @@ public class UtilityCommands implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String cmd = command.getName().toLowerCase();
 
-        if (!(sender instanceof Player) && (cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair"))) {
+        if (!(sender instanceof Player) && (cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair") || cmd.equals("clear"))) {
             if (args.length == 0 || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair")) {
                 sender.sendMessage(ChatColor.RED + "This command can only be executed by a player in-game!");
                 return true;
@@ -185,39 +288,83 @@ public class UtilityCommands implements CommandExecutor {
                 return handleStruck(sender, args);
             case "sudo":
                 return handleSudo(sender, args);
+            case "give":
+                return handleGive(sender, args);
+            case "effect":
+                return handleEffect(sender, args);
+            case "cleargrounditems":
+            case "cleargrouditems":
+            case "clearitems":
+            case "clearlag":
+                return handleClearGroundItems(sender);
+            case "clear":
+            case "ci":
+            case "clearinventory":
+                return handleClear(sender, args);
             default:
                 return false;
         }
     }
 
     private boolean handleGamemode(CommandSender sender, String[] args, GameMode mode, String modeName) {
-        Player target;
         if (args.length > 0) {
             if (!sender.hasPermission("staffcore.command.gamemode.others") && !sender.isOp()) {
                 sender.sendMessage(ChatColor.RED + "You do not have permission to change other players' game modes!");
                 return true;
             }
-            target = Bukkit.getPlayer(args[0]);
+            if (args[0].equals("*")) {
+                int count = 0;
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    p.setGameMode(mode);
+                    if (!p.equals(sender)) {
+                        p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour game mode was set to &e" + modeName + "&a by staff."));
+                    }
+                    count++;
+                }
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aSet game mode to &e" + modeName + "&a for &e" + count + " &aonline players."));
+                return true;
+            }
+            Player target = Bukkit.getPlayer(args[0]);
             if (target == null) {
                 sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
                 return true;
             }
+            target.setGameMode(mode);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aSet game mode to &e" + modeName + "&a for &e" + target.getName() + "&a."));
+            if (!target.equals(sender)) {
+                target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour game mode was set to &e" + modeName + "&a by staff."));
+            }
+            return true;
         } else if (sender instanceof Player) {
-            target = (Player) sender;
+            Player target = (Player) sender;
+            target.setGameMode(mode);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aSet game mode to &e" + modeName + "&a for &e" + target.getName() + "&a."));
+            return true;
         } else {
-            sender.sendMessage(ChatColor.RED + "Usage: /" + modeName.toLowerCase() + " <player>");
+            sender.sendMessage(ChatColor.RED + "Usage: /" + modeName.toLowerCase() + " <player|*>");
             return true;
         }
-
-        target.setGameMode(mode);
-        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aSet game mode to &e" + modeName + "&a for &e" + target.getName() + "&a."));
-        if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour game mode was set to &e" + modeName + "&a by staff."));
-        }
-        return true;
     }
 
     private boolean handleFly(CommandSender sender, String[] args) {
+        if (args.length > 0 && args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                boolean state = !target.getAllowFlight();
+                target.setAllowFlight(state);
+                if (!state) target.setFlying(false);
+                setFlyEnabled(target.getUniqueId(), state);
+                String status = state ? "&2enabled" : "&4disabled";
+                if (!target.equals(sender)) {
+                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour flight mode was " + status + " &aby staff."));
+                }
+                count++;
+            }
+            saveStates(plugin);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aToggled flight mode for &e" + count + " &aonline players."));
+            return true;
+        }
+
         Player target;
         if (args.length > 0) {
             target = Bukkit.getPlayer(args[0]);
@@ -228,13 +375,15 @@ public class UtilityCommands implements CommandExecutor {
         } else if (sender instanceof Player) {
             target = (Player) sender;
         } else {
-            sender.sendMessage(ChatColor.RED + "Usage: /fly <player>");
+            sender.sendMessage(ChatColor.RED + "Usage: /fly <player|*>");
             return true;
         }
 
         boolean state = !target.getAllowFlight();
         target.setAllowFlight(state);
         if (!state) target.setFlying(false);
+        setFlyEnabled(target.getUniqueId(), state);
+        saveStates(plugin);
 
         String status = state ? "&2enabled" : "&4disabled";
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFlight mode " + status + " &afor &e" + target.getName() + "&a."));
@@ -246,7 +395,7 @@ public class UtilityCommands implements CommandExecutor {
 
     private boolean handleSpeed(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(ChatColor.RED + "Usage: /speed <1-10> [player]");
+            sender.sendMessage(ChatColor.RED + "Usage: /speed <1-10> [player|*]");
             return true;
         }
 
@@ -256,6 +405,27 @@ public class UtilityCommands implements CommandExecutor {
             if (speedVal < 1 || speedVal > 10) throw new NumberFormatException();
         } catch (NumberFormatException e) {
             sender.sendMessage(ChatColor.RED + "Speed must be a number between 1 and 10! (1 is normal, 10 is max)");
+            return true;
+        }
+
+        float flySpeed = Math.min(1.0f, (speedVal == 1) ? 0.1f : (0.1f + (speedVal - 1) * (0.9f / 9.0f)));
+        float walkSpeed = Math.min(1.0f, (speedVal == 1) ? 0.2f : (0.2f + (speedVal - 1) * (0.8f / 9.0f)));
+
+        if (args.length > 1 && args[1].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                if (target.isFlying()) {
+                    target.setFlySpeed(flySpeed);
+                    flySpeeds.put(target.getUniqueId(), flySpeed);
+                } else {
+                    target.setWalkSpeed(walkSpeed);
+                    walkSpeeds.put(target.getUniqueId(), walkSpeed);
+                }
+                count++;
+            }
+            saveStates(plugin);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aSpeed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + count + " &aonline players."));
             return true;
         }
 
@@ -269,25 +439,44 @@ public class UtilityCommands implements CommandExecutor {
         } else if (sender instanceof Player) {
             target = (Player) sender;
         } else {
-            sender.sendMessage(ChatColor.RED + "Usage: /speed <1-10> <player>");
+            sender.sendMessage(ChatColor.RED + "Usage: /speed <1-10> <player|*>");
             return true;
         }
 
         if (target.isFlying()) {
-            float flySpeed = (speedVal == 1) ? 0.1f : (0.1f + (speedVal - 1) * (0.9f / 9.0f));
-            target.setFlySpeed(Math.min(1.0f, flySpeed));
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+            target.setFlySpeed(flySpeed);
+            flySpeeds.put(target.getUniqueId(), flySpeed);
+            saveStates(plugin);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     "&aFly speed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + target.getName() + "&a."));
         } else {
-            float walkSpeed = (speedVal == 1) ? 0.2f : (0.2f + (speedVal - 1) * (0.8f / 9.0f));
-            target.setWalkSpeed(Math.min(1.0f, walkSpeed));
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+            target.setWalkSpeed(walkSpeed);
+            walkSpeeds.put(target.getUniqueId(), walkSpeed);
+            saveStates(plugin);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     "&aWalk speed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + target.getName() + "&a."));
         }
         return true;
     }
 
     private boolean handleInvincible(CommandSender sender, String[] args) {
+        if (args.length > 0 && args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                UUID uuid = target.getUniqueId();
+                boolean nowInvincible = !isInvincible(uuid);
+                setInvincible(uuid, nowInvincible);
+                String status = nowInvincible ? "&2enabled" : "&4disabled";
+                if (!target.equals(sender)) {
+                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour invincibility was " + status + " &aby staff."));
+                }
+                count++;
+            }
+            saveStates(plugin);
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aToggled invincibility for &e" + count + " &aonline players."));
+            return true;
+        }
+
         Player target;
         if (args.length > 0) {
             target = Bukkit.getPlayer(args[0]);
@@ -298,13 +487,14 @@ public class UtilityCommands implements CommandExecutor {
         } else if (sender instanceof Player) {
             target = (Player) sender;
         } else {
-            sender.sendMessage(ChatColor.RED + "Usage: /invincible <player>");
+            sender.sendMessage(ChatColor.RED + "Usage: /invincible <player|*>");
             return true;
         }
 
         UUID uuid = target.getUniqueId();
         boolean nowInvincible = !isInvincible(uuid);
         setInvincible(uuid, nowInvincible);
+        saveStates(plugin);
 
         String status = nowInvincible ? "&2enabled" : "&4disabled";
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aInvincibility " + status + " &afor &e" + target.getName() + "&a."));
@@ -316,7 +506,18 @@ public class UtilityCommands implements CommandExecutor {
 
     private boolean handleTpHere(Player staff, String[] args) {
         if (args.length < 1) {
-            staff.sendMessage(ChatColor.RED + "Usage: /tphere <player>");
+            staff.sendMessage(ChatColor.RED + "Usage: /tphere <player|*>");
+            return true;
+        }
+        if (args[0].equals("*")) {
+            int count = 0;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (p.equals(staff)) continue;
+                p.teleport(staff.getLocation());
+                p.sendMessage(ChatColor.YELLOW + "You were teleported to " + staff.getName() + ".");
+                count++;
+            }
+            staff.sendMessage(ChatColor.GREEN + "Teleported " + count + " players to your location.");
             return true;
         }
         Player target = Bukkit.getPlayer(args[0]);
@@ -436,11 +637,9 @@ public class UtilityCommands implements CommandExecutor {
         if (name == null) return null;
         String clean = name.toUpperCase().replace("MINECRAFT:", "").trim();
 
-        // 1. Direct Bukkit match
         Enchantment direct = Enchantment.getByName(clean);
         if (direct != null) return direct;
 
-        // 2. Check friendly aliases across 1.8.8 through 1.20+
         switch (clean.toLowerCase()) {
             case "sharpness": return Enchantment.getByName("DAMAGE_ALL");
             case "smite": return Enchantment.getByName("DAMAGE_UNDEAD");
@@ -483,7 +682,6 @@ public class UtilityCommands implements CommandExecutor {
             default: break;
         }
 
-        // 3. Fuzzy search in all enchantments
         for (Enchantment e : Enchantment.values()) {
             if (e.getName().equalsIgnoreCase(clean) || e.getName().replace("_", "").equalsIgnoreCase(clean.replace("_", ""))) {
                 return e;
@@ -494,7 +692,25 @@ public class UtilityCommands implements CommandExecutor {
 
     private boolean handleSendServer(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "Usage: /sendserver <player> <server>");
+            sender.sendMessage(ChatColor.RED + "Usage: /sendserver <player|*> <server>");
+            return true;
+        }
+
+        String serverName = args[1];
+
+        if (args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                try {
+                    ByteArrayOutputStream b = new ByteArrayOutputStream();
+                    DataOutputStream out = new DataOutputStream(b);
+                    out.writeUTF("Connect");
+                    out.writeUTF(serverName);
+                    target.sendPluginMessage(plugin, "BungeeCord", b.toByteArray());
+                    count++;
+                } catch (Exception ignored) {}
+            }
+            sender.sendMessage(ChatColor.GREEN + "Sending " + count + " players to server " + serverName + "...");
             return true;
         }
 
@@ -504,7 +720,6 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        String serverName = args[1];
         try {
             ByteArrayOutputStream b = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(b);
@@ -519,6 +734,19 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     private boolean handleHeal(CommandSender sender, String[] args) {
+        if (args.length > 0 && args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                healSinglePlayer(target);
+                if (!target.equals(sender)) {
+                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
+                }
+                count++;
+            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully healed &e" + count + " &aonline players."));
+            return true;
+        }
+
         Player target;
         if (args.length > 0) {
             target = Bukkit.getPlayer(args[0]);
@@ -529,10 +757,19 @@ public class UtilityCommands implements CommandExecutor {
         } else if (sender instanceof Player) {
             target = (Player) sender;
         } else {
-            sender.sendMessage(ChatColor.RED + "Usage from console: /heal <player>");
+            sender.sendMessage(ChatColor.RED + "Usage from console: /heal <player|*>");
             return true;
         }
 
+        healSinglePlayer(target);
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully healed &e" + target.getName() + "&a."));
+        if (!target.equals(sender)) {
+            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
+        }
+        return true;
+    }
+
+    private void healSinglePlayer(Player target) {
         target.setHealth(target.getMaxHealth());
         target.setFoodLevel(20);
         target.setSaturation(20.0f);
@@ -541,15 +778,24 @@ public class UtilityCommands implements CommandExecutor {
         for (PotionEffect effect : target.getActivePotionEffects()) {
             target.removePotionEffect(effect.getType());
         }
-
-        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully healed &e" + target.getName() + "&a."));
-        if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
-        }
-        return true;
     }
 
     private boolean handleFeed(CommandSender sender, String[] args) {
+        if (args.length > 0 && args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                target.setFoodLevel(20);
+                target.setSaturation(20.0f);
+                target.setExhaustion(0.0f);
+                if (!target.equals(sender)) {
+                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour appetite has been fully sated by staff."));
+                }
+                count++;
+            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully fed &e" + count + " &aonline players."));
+            return true;
+        }
+
         Player target;
         if (args.length > 0) {
             target = Bukkit.getPlayer(args[0]);
@@ -560,7 +806,7 @@ public class UtilityCommands implements CommandExecutor {
         } else if (sender instanceof Player) {
             target = (Player) sender;
         } else {
-            sender.sendMessage(ChatColor.RED + "Usage from console: /feed <player>");
+            sender.sendMessage(ChatColor.RED + "Usage from console: /feed <player|*>");
             return true;
         }
 
@@ -588,14 +834,28 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         item.setDurability((short) 0);
-        staff.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+        staff.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 "&aSuccessfully repaired &e" + item.getType().name().replace("_", " ") + "&a to full durability!"));
         return true;
     }
 
     private boolean handleStruck(CommandSender sender, String[] args) {
-        Location loc = null;
-        String targetDesc = "target location";
+        if (args.length > 0 && args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                if (sender instanceof Player && target.equals(sender)) continue;
+                Location loc = target.getLocation();
+                if (loc.getWorld() != null) {
+                    loc.getWorld().strikeLightning(loc);
+                    count++;
+                }
+            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aStruck lightning on &e" + count + " &aonline players!"));
+            return true;
+        }
+
+        Location loc;
+        String targetDesc;
 
         if (args.length > 0) {
             Player target = Bukkit.getPlayer(args[0]);
@@ -614,7 +874,7 @@ public class UtilityCommands implements CommandExecutor {
             }
             targetDesc = "your crosshair";
         } else {
-            sender.sendMessage(ChatColor.RED + "Usage from console: /struck <player>");
+            sender.sendMessage(ChatColor.RED + "Usage from console: /struck <player|*>");
             return true;
         }
 
@@ -627,13 +887,7 @@ public class UtilityCommands implements CommandExecutor {
 
     private boolean handleSudo(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "Usage: /sudo <player> <command | m:message>");
-            return true;
-        }
-
-        Player target = Bukkit.getPlayer(args[0]);
-        if (target == null) {
-            sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found or is offline!");
+            sender.sendMessage(ChatColor.RED + "Usage: /sudo <player|*> <command | m:message>");
             return true;
         }
 
@@ -644,17 +898,414 @@ public class UtilityCommands implements CommandExecutor {
         }
         String input = sb.toString().trim();
 
+        if (args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                if (sender instanceof Player && target.equals(sender)) continue;
+                if (input.toLowerCase().startsWith("m:")) {
+                    String chatMessage = input.substring(2).trim();
+                    target.chat(chatMessage);
+                } else {
+                    String commandToRun = input.startsWith("/") ? input.substring(1) : input;
+                    target.performCommand(commandToRun);
+                }
+                count++;
+            }
+            if (input.toLowerCase().startsWith("m:")) {
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                        "&aForced &e" + count + " &aplayers to chat: &f" + input.substring(2).trim()));
+            } else {
+                String commandToRun = input.startsWith("/") ? input.substring(1) : input;
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                        "&aForced &e" + count + " &aplayers to execute: &f/" + commandToRun));
+            }
+            return true;
+        }
+
+        Player target = Bukkit.getPlayer(args[0]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found or is offline!");
+            return true;
+        }
+
         if (input.toLowerCase().startsWith("m:")) {
             String chatMessage = input.substring(2).trim();
             target.chat(chatMessage);
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     "&aForced &e" + target.getName() + " &ato chat: &f" + chatMessage));
         } else {
             String commandToRun = input.startsWith("/") ? input.substring(1) : input;
             target.performCommand(commandToRun);
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     "&aForced &e" + target.getName() + " &ato execute: &f/" + commandToRun));
         }
         return true;
+    }
+
+    private boolean handleGive(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "Usage: /give <player|*> <item> [amount]");
+            return true;
+        }
+
+        Material mat = matchEasyMaterial(args[1]);
+        if (mat == null || mat == Material.AIR) {
+            sender.sendMessage(ChatColor.RED + "Item '" + args[1] + "' not found! Press TAB to autocomplete item names.");
+            return true;
+        }
+
+        int amount = 1;
+        if (args.length >= 3) {
+            try {
+                amount = Integer.parseInt(args[2]);
+                if (amount < 1) amount = 1;
+                if (amount > 2304) amount = 2304;
+            } catch (NumberFormatException e) {
+                sender.sendMessage(ChatColor.RED + "Invalid amount '" + args[2] + "'! Must be a positive number.");
+                return true;
+            }
+        }
+
+        String itemName = mat.name().toLowerCase().replace("_", " ");
+
+        if (args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                ItemStack stack = new ItemStack(mat, amount);
+                target.getInventory().addItem(stack);
+                if (!target.equals(sender)) {
+                    target.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                            "&aYou received &e" + amount + "x " + itemName + " &afrom staff."));
+                }
+                count++;
+            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aGave &e" + amount + "x " + itemName + " &ato &e" + count + " &aonline players."));
+            return true;
+        }
+
+        Player target = Bukkit.getPlayer(args[0]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
+            return true;
+        }
+
+        ItemStack stack = new ItemStack(mat, amount);
+        target.getInventory().addItem(stack);
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                "&aGave &e" + amount + "x " + itemName + " &ato &e" + target.getName() + "&a."));
+        if (!target.equals(sender)) {
+            target.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aYou received &e" + amount + "x " + itemName + " &afrom staff."));
+        }
+        return true;
+    }
+
+    public static Material matchEasyMaterial(String input) {
+        if (input == null || input.trim().isEmpty()) return null;
+        String clean = input.trim().toUpperCase().replace("MINECRAFT:", "").replace(" ", "_");
+
+        Material direct = Material.matchMaterial(clean);
+        if (direct != null) return direct;
+
+        try {
+            return Material.valueOf(clean);
+        } catch (IllegalArgumentException ignored) {}
+
+        switch (clean.toLowerCase().replace("_", "")) {
+            case "gap":
+            case "gapple":
+            case "goldenapple":
+                return Material.GOLDEN_APPLE;
+            case "egap":
+            case "notchapple":
+            case "enchantedgoldenapple":
+                try {
+                    return Material.valueOf("ENCHANTED_GOLDEN_APPLE");
+                } catch (IllegalArgumentException e) {
+                    return Material.GOLDEN_APPLE;
+                }
+            case "totem":
+            case "totemofundying":
+                try {
+                    return Material.valueOf("TOTEM_OF_UNDYING");
+                } catch (IllegalArgumentException e) {
+                    try {
+                        return Material.valueOf("TOTEM");
+                    } catch (IllegalArgumentException ignored) {}
+                }
+                break;
+            case "pearl":
+            case "enderpearl":
+                return Material.ENDER_PEARL;
+            case "xpbottle":
+            case "expbottle":
+            case "experiencebottle":
+                try {
+                    return Material.valueOf("EXPERIENCE_BOTTLE");
+                } catch (IllegalArgumentException e) {
+                    return Material.valueOf("EXP_BOTTLE");
+                }
+            case "commandblock":
+            case "cmdblock":
+                try {
+                    return Material.valueOf("COMMAND_BLOCK");
+                } catch (IllegalArgumentException e) {
+                    return Material.valueOf("COMMAND");
+                }
+            case "steak":
+                return Material.COOKED_BEEF;
+            default:
+                break;
+        }
+
+        String stripped = clean.replace("_", "");
+        for (Material m : Material.values()) {
+            if (m.name().replace("_", "").equalsIgnoreCase(stripped)) {
+                return m;
+            }
+        }
+        for (Material m : Material.values()) {
+            if (m.name().toLowerCase().startsWith(clean.toLowerCase())) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    private boolean handleEffect(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "Usage: /effect <player|*> <potion|clear> [seconds] [level]");
+            return true;
+        }
+
+        String effectArg = args[1].trim();
+        if (effectArg.equalsIgnoreCase("clear") || effectArg.equalsIgnoreCase("none") || effectArg.equalsIgnoreCase("remove")) {
+            if (args[0].equals("*")) {
+                int count = 0;
+                for (Player target : Bukkit.getOnlinePlayers()) {
+                    for (PotionEffect pe : target.getActivePotionEffects()) {
+                        target.removePotionEffect(pe.getType());
+                    }
+                    count++;
+                }
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                        "&aCleared all potion effects for &e" + count + " &aonline players."));
+                return true;
+            }
+
+            Player target = Bukkit.getPlayer(args[0]);
+            if (target == null) {
+                sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
+                return true;
+            }
+            for (PotionEffect pe : target.getActivePotionEffects()) {
+                target.removePotionEffect(pe.getType());
+            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aCleared all potion effects for &e" + target.getName() + "&a."));
+            return true;
+        }
+
+        PotionEffectType type = getPotionEffectByName(effectArg);
+        if (type == null) {
+            sender.sendMessage(ChatColor.RED + "Potion effect '" + effectArg + "' not found! Press TAB to view available effects.");
+            return true;
+        }
+
+        int seconds = 60;
+        if (args.length >= 3) {
+            try {
+                seconds = Integer.parseInt(args[2]);
+                if (seconds < 0) seconds = 0;
+                if (seconds > 1000000) seconds = 1000000;
+            } catch (NumberFormatException e) {
+                sender.sendMessage(ChatColor.RED + "Duration must be a valid number of seconds!");
+                return true;
+            }
+        }
+
+        int level = 1;
+        if (args.length >= 4) {
+            try {
+                level = Integer.parseInt(args[3]);
+                if (level < 1) level = 1;
+                if (level > 255) level = 255;
+            } catch (NumberFormatException e) {
+                sender.sendMessage(ChatColor.RED + "Level must be between 1 and 255!");
+                return true;
+            }
+        }
+
+        int ticks = type.isInstant() ? 1 : (seconds * 20);
+        int amplifier = level - 1;
+
+        if (args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                target.removePotionEffect(type);
+                if (seconds > 0) {
+                    target.addPotionEffect(new PotionEffect(type, ticks, amplifier));
+                }
+                count++;
+            }
+            if (seconds == 0) {
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                        "&aRemoved &e" + type.getName() + " &afrom &e" + count + " &aonline players."));
+            } else {
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                        "&aApplied &e" + type.getName() + " " + level + " &a(" + seconds + "s) to &e" + count + " &aonline players."));
+            }
+            return true;
+        }
+
+        Player target = Bukkit.getPlayer(args[0]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
+            return true;
+        }
+
+        target.removePotionEffect(type);
+        if (seconds == 0) {
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aRemoved &e" + type.getName() + " &afrom &e" + target.getName() + "&a."));
+        } else {
+            target.addPotionEffect(new PotionEffect(type, ticks, amplifier));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aApplied &e" + type.getName() + " " + level + " &a(" + seconds + "s) to &e" + target.getName() + "&a."));
+        }
+        return true;
+    }
+
+    public static PotionEffectType getPotionEffectByName(String name) {
+        if (name == null) return null;
+        String clean = name.toUpperCase().replace("MINECRAFT:", "").trim();
+
+        PotionEffectType direct = PotionEffectType.getByName(clean);
+        if (direct != null) return direct;
+
+        switch (clean.toLowerCase().replace("_", "")) {
+            case "speed":
+            case "swiftness": return PotionEffectType.SPEED;
+            case "slowness":
+            case "slow": return PotionEffectType.SLOW;
+            case "haste":
+            case "fastdigging": return PotionEffectType.FAST_DIGGING;
+            case "miningfatigue":
+            case "fatigue":
+            case "slowdigging": return PotionEffectType.SLOW_DIGGING;
+            case "strength":
+            case "increasedamage": return PotionEffectType.INCREASE_DAMAGE;
+            case "instanthealth":
+            case "heal":
+            case "health": return PotionEffectType.HEAL;
+            case "instantdamage":
+            case "harm":
+            case "damage": return PotionEffectType.HARM;
+            case "jump":
+            case "jumpboost": return PotionEffectType.JUMP;
+            case "nausea":
+            case "confusion": return PotionEffectType.CONFUSION;
+            case "regeneration":
+            case "regen": return PotionEffectType.REGENERATION;
+            case "resistance":
+            case "res":
+            case "damageresistance": return PotionEffectType.DAMAGE_RESISTANCE;
+            case "fireresistance":
+            case "fireres": return PotionEffectType.FIRE_RESISTANCE;
+            case "waterbreathing": return PotionEffectType.WATER_BREATHING;
+            case "invisibility":
+            case "invis": return PotionEffectType.INVISIBILITY;
+            case "blindness":
+            case "blind": return PotionEffectType.BLINDNESS;
+            case "nightvision":
+            case "nv": return PotionEffectType.NIGHT_VISION;
+            case "hunger": return PotionEffectType.HUNGER;
+            case "weakness":
+            case "weak": return PotionEffectType.WEAKNESS;
+            case "poison": return PotionEffectType.POISON;
+            case "wither": return PotionEffectType.WITHER;
+            case "healthboost": return PotionEffectType.HEALTH_BOOST;
+            case "absorption":
+            case "absorb": return PotionEffectType.ABSORPTION;
+            case "saturation": return PotionEffectType.SATURATION;
+            default: break;
+        }
+
+        for (PotionEffectType pet : PotionEffectType.values()) {
+            if (pet != null && pet.getName() != null) {
+                if (pet.getName().equalsIgnoreCase(clean) || pet.getName().replace("_", "").equalsIgnoreCase(clean.replace("_", ""))) {
+                    return pet;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean handleClearGroundItems(CommandSender sender) {
+        int removed = 0;
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (entity instanceof Item && !entity.isDead()) {
+                    entity.remove();
+                    removed++;
+                }
+            }
+        }
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                "&aCleared &e" + removed + " &aground items across all worlds."));
+        return true;
+    }
+
+    private boolean handleClear(CommandSender sender, String[] args) {
+        if (args.length > 0 && args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                clearSinglePlayerInventory(target);
+                if (!target.equals(sender)) {
+                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour inventory was cleared by staff."));
+                }
+                count++;
+            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aCleared inventories for &e" + count + " &aonline players."));
+            return true;
+        }
+
+        Player target;
+        if (args.length > 0) {
+            target = Bukkit.getPlayer(args[0]);
+            if (target == null) {
+                sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
+                return true;
+            }
+        } else if (sender instanceof Player) {
+            target = (Player) sender;
+        } else {
+            sender.sendMessage(ChatColor.RED + "Usage: /clear <player|*>");
+            return true;
+        }
+
+        clearSinglePlayerInventory(target);
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                "&aCleared inventory of &e" + target.getName() + "&a."));
+        if (!target.equals(sender)) {
+            target.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aYour inventory was cleared by staff."));
+        }
+        return true;
+    }
+
+    private void clearSinglePlayerInventory(Player target) {
+        target.getInventory().clear();
+        target.getInventory().setHelmet(null);
+        target.getInventory().setChestplate(null);
+        target.getInventory().setLeggings(null);
+        target.getInventory().setBoots(null);
+        try {
+            Method m = target.getInventory().getClass().getMethod("setItemInOffHand", ItemStack.class);
+            m.invoke(target.getInventory(), (ItemStack) null);
+        } catch (Throwable ignored) {}
+        target.updateInventory();
     }
 }

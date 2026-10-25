@@ -22,6 +22,7 @@ public class PunishmentManager {
 
     private final List<Punishment> punishments = new ArrayList<>();
     private final Map<UUID, String> ipHistory = new HashMap<>();
+    private final Map<UUID, String> uuidToName = new HashMap<>();
     private final Map<String, String> nameToIpHistory = new HashMap<>();
 
     public PunishmentManager(StaffCore plugin) {
@@ -50,6 +51,7 @@ public class PunishmentManager {
         data = YamlConfiguration.loadConfiguration(file);
         punishments.clear();
         ipHistory.clear();
+        uuidToName.clear();
         nameToIpHistory.clear();
 
         // 1. Load punishments from punishments.yml
@@ -77,7 +79,7 @@ public class PunishmentManager {
             }
         }
 
-        // 2. Load IP history
+        // 2. Load IP history & account names
         ConfigurationSection ipSection = data.getConfigurationSection("ip-history");
         if (ipSection != null) {
             for (String key : ipSection.getKeys(false)) {
@@ -88,10 +90,18 @@ public class PunishmentManager {
                     if (!ip.isEmpty()) {
                         ipHistory.put(uuid, ip);
                         if (!name.isEmpty()) {
+                            uuidToName.put(uuid, name);
                             nameToIpHistory.put(name.toLowerCase(), ip);
                         }
                     }
                 } catch (Exception ignored) {}
+            }
+        }
+
+        // Also cache any currently online players
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p.getAddress() != null && p.getAddress().getAddress() != null) {
+                cachePlayerIp(p.getUniqueId(), p.getName(), p.getAddress().getAddress().getHostAddress());
             }
         }
     }
@@ -113,8 +123,13 @@ public class PunishmentManager {
         }
 
         for (Map.Entry<UUID, String> entry : ipHistory.entrySet()) {
-            String key = "ip-history." + entry.getKey().toString();
+            UUID uuid = entry.getKey();
+            String key = "ip-history." + uuid.toString();
             data.set(key + ".ip", entry.getValue());
+            String name = uuidToName.get(uuid);
+            if (name != null && !name.isEmpty()) {
+                data.set(key + ".name", name);
+            }
         }
 
         try {
@@ -128,17 +143,71 @@ public class PunishmentManager {
         if (uuid == null || ip == null || ip.isEmpty()) return;
         ipHistory.put(uuid, ip);
         if (name != null && !name.isEmpty()) {
+            uuidToName.put(uuid, name);
             nameToIpHistory.put(name.toLowerCase(), ip);
         }
+        saveData();
     }
 
     public String getLastKnownIp(UUID uuid) {
+        if (uuid == null) return null;
         return ipHistory.get(uuid);
     }
 
     public String getLastKnownIpByName(String name) {
         if (name == null) return null;
         return nameToIpHistory.get(name.toLowerCase());
+    }
+
+    /**
+     * Returns all known account names that have logged in from the specified IP address.
+     */
+    public List<String> getAccountsByIp(String ip) {
+        if (ip == null || ip.trim().isEmpty()) return Collections.emptyList();
+        String cleanIp = ip.trim();
+        Set<String> accounts = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
+        // 1. Check IP history map
+        for (Map.Entry<UUID, String> entry : ipHistory.entrySet()) {
+            if (cleanIp.equalsIgnoreCase(entry.getValue())) {
+                String name = uuidToName.get(entry.getKey());
+                if (name != null && !name.isEmpty()) {
+                    accounts.add(name);
+                } else {
+                    org.bukkit.OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
+                    if (op != null && op.getName() != null) {
+                        accounts.add(op.getName());
+                    }
+                }
+            }
+        }
+
+        // 2. Check nameToIpHistory map
+        for (Map.Entry<String, String> entry : nameToIpHistory.entrySet()) {
+            if (cleanIp.equalsIgnoreCase(entry.getValue())) {
+                accounts.add(entry.getKey());
+            }
+        }
+
+        // 3. Check punishment records
+        for (Punishment p : punishments) {
+            if (p.getTargetIp() != null && cleanIp.equalsIgnoreCase(p.getTargetIp())) {
+                if (p.getTargetName() != null && !p.getTargetName().isEmpty() && !p.getTargetName().equalsIgnoreCase("Unknown")) {
+                    accounts.add(p.getTargetName());
+                }
+            }
+        }
+
+        // 4. Check currently online players
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.getAddress() != null && online.getAddress().getAddress() != null) {
+                if (cleanIp.equalsIgnoreCase(online.getAddress().getAddress().getHostAddress())) {
+                    accounts.add(online.getName());
+                }
+            }
+        }
+
+        return new ArrayList<>(accounts);
     }
 
     /**
@@ -196,18 +265,55 @@ public class PunishmentManager {
             }
         }
 
-        // 3. Warn
+        // 3. Warn & Auto-Ban Check
         if (type == PunishmentType.WARN) {
+            int maxWarnings = plugin.getConfig().getInt("warning.max-warnings", 3);
+            int activeWarns = targetUUID != null ? getActiveWarnCount(targetUUID) : 1;
+
             Player target = targetUUID != null ? Bukkit.getPlayer(targetUUID) : Bukkit.getPlayer(targetName);
             if (target != null && target.isOnline()) {
                 List<String> warnLines = plugin.getMessageManager().getMessageList("warning.received");
                 for (String line : warnLines) {
-                    target.sendMessage(line.replace("%staff%", staffName).replace("%reason%", reason));
+                    target.sendMessage(line
+                            .replace("%staff%", staffName)
+                            .replace("%reason%", reason)
+                            .replace("%count%", String.valueOf(activeWarns))
+                            .replace("%max%", String.valueOf(maxWarnings)));
                 }
+            }
+
+            // Auto-ban when reaching threshold (default 3 warnings), using the final warning's reason as the ban reason
+            if (maxWarnings > 0 && targetUUID != null && activeWarns >= maxWarnings) {
+                clearActiveWarnings(targetUUID);
+                String resolvedIp = (targetIp != null && !targetIp.isEmpty()) ? targetIp : getLastKnownIp(targetUUID);
+                createPunishment(targetUUID, targetName, resolvedIp != null ? resolvedIp : "", staffName, PunishmentType.BAN, reason, -1, silent);
             }
         }
 
         return p;
+    }
+
+    public int getActiveWarnCount(UUID targetUUID) {
+        if (targetUUID == null) return 0;
+        int count = 0;
+        for (Punishment p : punishments) {
+            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) && p.isActive() && p.getType() == PunishmentType.WARN) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public void clearActiveWarnings(UUID targetUUID) {
+        if (targetUUID == null) return;
+        boolean changed = false;
+        for (Punishment p : punishments) {
+            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) && p.isActive() && p.getType() == PunishmentType.WARN) {
+                p.setActive(false);
+                changed = true;
+            }
+        }
+        if (changed) saveData();
     }
 
     public boolean unban(UUID targetUUID) {

@@ -18,7 +18,21 @@ public class FreezeCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /freeze <player>"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /freeze <player|*>"));
+            return true;
+        }
+
+        Player staffPlayer = (sender instanceof Player) ? (Player) sender : null;
+
+        if (args[0].equals("*")) {
+            int count = 0;
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                if (sender instanceof Player && target.equals(sender)) continue;
+                if (target.hasPermission("staffcore.bypass.freeze") || target.isOp()) continue;
+                plugin.getFreezeManager().toggleFreeze(target, staffPlayer);
+                count++;
+            }
+            sender.sendMessage(plugin.getMessageManager().color("&aToggled freeze for &e" + count + " &aonline players."));
             return true;
         }
 
@@ -42,7 +56,6 @@ public class FreezeCommand implements CommandExecutor {
             return true;
         }
 
-        Player staffPlayer = (sender instanceof Player) ? (Player) sender : null;
         plugin.getFreezeManager().toggleFreeze(target, staffPlayer);
         return true;
     }
