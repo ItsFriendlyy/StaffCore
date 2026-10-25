@@ -4,6 +4,7 @@ import com.github.staffcore.StaffCore;
 import com.github.staffcore.punishment.PunishmentType;
 import com.github.staffcore.util.TimeUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -47,9 +48,133 @@ public class PunishCommands implements CommandExecutor {
                 return handleUnmute(sender, args);
             case "warn":
                 return handleWarn(sender, args);
+            case "setjail":
+                return handleSetJail(sender, args);
+            case "deljail":
+                return handleDelJail(sender, args);
+            case "jail":
+                return handleJail(sender, args, false);
+            case "tempjail":
+                return handleJail(sender, args, true);
+            case "unjail":
+                return handleUnjail(sender, args);
             default:
                 return false;
         }
+    }
+
+    private boolean handleSetJail(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(plugin.getMessageManager().color("&cOnly in-game players can set a jail location!"));
+            return true;
+        }
+        if (args.length < 1) {
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /setjail <jail_name>"));
+            return true;
+        }
+
+        Player staff = (Player) sender;
+        String jailName = args[0].toLowerCase();
+        plugin.getPunishmentManager().setJailLocation(jailName, staff.getLocation());
+        staff.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aSuccessfully set jail &e" + jailName + " &aat your current location!"));
+        return true;
+    }
+
+    private boolean handleDelJail(CommandSender sender, String[] args) {
+        if (args.length < 1) {
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /deljail <jail_name>"));
+            return true;
+        }
+        String jailName = args[0].toLowerCase();
+        if (plugin.getPunishmentManager().deleteJail(jailName)) {
+            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aDeleted jail &e" + jailName + "&a."));
+        } else {
+            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &cJail &e" + jailName + " &cdoes not exist!"));
+        }
+        return true;
+    }
+
+    private boolean handleJail(CommandSender sender, String[] args, boolean temporary) {
+        int minArgs = temporary ? 3 : 2;
+        if (args.length < minArgs) {
+            if (temporary) {
+                sender.sendMessage(plugin.getMessageManager().color("&cUsage: /tempjail <player> <jail_name> <duration> [reason] [-s]"));
+            } else {
+                sender.sendMessage(plugin.getMessageManager().color("&cUsage: /jail <player> <jail_name> [reason] [-s]"));
+            }
+            return true;
+        }
+
+        String targetInput = args[0];
+        String jailName = args[1].toLowerCase();
+        Location jailLoc = plugin.getPunishmentManager().getJailLocation(jailName);
+        if (jailLoc == null) {
+            sender.sendMessage(plugin.getMessageManager().color("&cJail &e" + jailName + " &cdoes not exist! Create it first using &e/setjail " + jailName));
+            return true;
+        }
+
+        long duration = -1;
+        int reasonStartIndex = 2;
+        if (temporary) {
+            duration = TimeUtil.parseDuration(args[2]);
+            if (duration <= 0) {
+                sender.sendMessage(plugin.getMessageManager().getPrefixedMessage("messages.invalid-duration"));
+                return true;
+            }
+            reasonStartIndex = 3;
+        }
+
+        ParsedReason parsed = parseSilentAndReason(args, reasonStartIndex);
+
+        String targetName = targetInput;
+        UUID targetUUID = null;
+
+        Player onlineTarget = Bukkit.getPlayer(targetInput);
+        if (onlineTarget != null) {
+            targetUUID = onlineTarget.getUniqueId();
+            targetName = onlineTarget.getName();
+
+            if (onlineTarget.hasPermission("staffcore.bypass.jail") || onlineTarget.isOp()) {
+                sender.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
+                                .replace("%target%", targetName)));
+                return true;
+            }
+        } else {
+            @SuppressWarnings("deprecation")
+            OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetInput);
+            if (offlineTarget.hasPlayedBefore() || offlineTarget.isOnline()) {
+                targetUUID = offlineTarget.getUniqueId();
+                targetName = offlineTarget.getName() != null ? offlineTarget.getName() : targetInput;
+            } else {
+                sender.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer not found!")
+                                .replace("%target%", targetInput)));
+                return true;
+            }
+        }
+
+        plugin.getPunishmentManager().jailPlayer(targetUUID, targetName, jailName, sender.getName(), parsed.reason, duration, parsed.silent);
+        return true;
+    }
+
+    private boolean handleUnjail(CommandSender sender, String[] args) {
+        if (args.length < 1) {
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unjail <player>"));
+            return true;
+        }
+
+        String targetInput = args[0];
+        @SuppressWarnings("deprecation")
+        OfflinePlayer target = Bukkit.getOfflinePlayer(targetInput);
+
+        boolean success = plugin.getPunishmentManager().unjail(target.getUniqueId());
+        if (success) {
+            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aSuccessfully unjailed &e" + targetInput + "&a."));
+        } else {
+            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &cPlayer &e" + targetInput + " &cis not jailed!"));
+        }
+        return true;
     }
 
     private boolean handleBan(CommandSender sender, String[] args, boolean temporary, boolean isIp) {

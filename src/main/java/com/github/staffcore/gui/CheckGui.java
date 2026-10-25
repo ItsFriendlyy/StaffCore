@@ -147,6 +147,7 @@ public class CheckGui {
         // Punishment History counts & reasons
         int totalBans = plugin.getPunishmentManager().getBanCount(target.getUniqueId());
         int totalMutes = plugin.getPunishmentManager().getMuteCount(target.getUniqueId());
+        int totalJails = plugin.getPunishmentManager().getJailCount(target.getUniqueId());
         int totalWarns = plugin.getPunishmentManager().getWarnCount(target.getUniqueId());
         int activeWarns = plugin.getPunishmentManager().getActiveWarnCount(target.getUniqueId());
         int maxWarns = plugin.getConfig().getInt("warning.max-warnings", 3);
@@ -155,6 +156,7 @@ public class CheckGui {
         List<String> historyLore = new ArrayList<>();
         historyLore.add(ChatColor.GRAY + "Times Banned: " + (totalBans > 0 ? ChatColor.RED : ChatColor.GREEN) + totalBans);
         historyLore.add(ChatColor.GRAY + "Times Muted: " + (totalMutes > 0 ? ChatColor.GOLD : ChatColor.GREEN) + totalMutes);
+        historyLore.add(ChatColor.GRAY + "Times Jailed: " + (totalJails > 0 ? ChatColor.LIGHT_PURPLE : ChatColor.GREEN) + totalJails);
         historyLore.add(ChatColor.GRAY + "Active Warnings: " + (activeWarns > 0 ? ChatColor.YELLOW : ChatColor.GREEN) + activeWarns + (maxWarns > 0 ? "/" + maxWarns : ""));
         historyLore.add(ChatColor.GRAY + "Total Warnings: " + (totalWarns > 0 ? ChatColor.YELLOW : ChatColor.GREEN) + totalWarns);
 
@@ -187,9 +189,10 @@ public class CheckGui {
         // Active Status
         Punishment activeBan = plugin.getPunishmentManager().getActiveBan(target.getUniqueId());
         Punishment activeMute = plugin.getPunishmentManager().getActiveMute(target.getUniqueId());
+        Punishment activeJail = plugin.getPunishmentManager().getActiveJail(target.getUniqueId());
         boolean isFrozen = target.isOnline() && plugin.getFreezeManager().isFrozen(target.getUniqueId());
 
-        Material statusMat = (activeBan != null || activeMute != null || isFrozen) ? Material.REDSTONE_BLOCK : Material.EMERALD_BLOCK;
+        Material statusMat = (activeBan != null || activeMute != null || activeJail != null || isFrozen) ? Material.REDSTONE_BLOCK : Material.EMERALD_BLOCK;
         List<String> statusLore = new ArrayList<>();
         statusLore.add(ChatColor.GRAY + "Currently Banned: " + (activeBan != null ? ChatColor.RED + "YES (" + activeBan.getType().name() + ")" : ChatColor.GREEN + "NO"));
         if (activeBan != null) {
@@ -202,6 +205,12 @@ public class CheckGui {
             statusLore.add(ChatColor.GOLD + " » Reason: " + ChatColor.WHITE + activeMute.getReason());
             statusLore.add(ChatColor.GOLD + " » By: " + ChatColor.YELLOW + activeMute.getStaffName());
             statusLore.add(ChatColor.GOLD + " » Remaining: " + ChatColor.YELLOW + TimeUtil.formatRemaining(activeMute.getExpireTime()));
+        }
+        statusLore.add(ChatColor.GRAY + "Currently Jailed: " + (activeJail != null ? ChatColor.RED + "YES" : ChatColor.GREEN + "NO"));
+        if (activeJail != null) {
+            statusLore.add(ChatColor.LIGHT_PURPLE + " » Reason: " + ChatColor.WHITE + activeJail.getReason());
+            statusLore.add(ChatColor.LIGHT_PURPLE + " » By: " + ChatColor.YELLOW + activeJail.getStaffName());
+            statusLore.add(ChatColor.LIGHT_PURPLE + " » Remaining: " + ChatColor.YELLOW + TimeUtil.formatRemaining(activeJail.getExpireTime()));
         }
         statusLore.add(ChatColor.GRAY + "Currently Frozen: " + (isFrozen ? ChatColor.RED + "YES" : ChatColor.GREEN + "NO"));
 
@@ -240,6 +249,8 @@ public class CheckGui {
                 icon = Material.REDSTONE_BLOCK;
             } else if (p.getType() == PunishmentType.MUTE || p.getType() == PunishmentType.TEMP_MUTE) {
                 icon = Material.BOOK;
+            } else if (p.getType() == PunishmentType.JAIL || p.getType() == PunishmentType.TEMP_JAIL) {
+                icon = matchCrossVersionMaterial("IRON_BARS", "IRON_FENCE");
             }
 
             boolean currentlyActive = p.isActive() && !p.isExpired();
@@ -293,6 +304,9 @@ public class CheckGui {
             case MUTE:
             case TEMP_MUTE:
                 return ChatColor.GOLD;
+            case JAIL:
+            case TEMP_JAIL:
+                return ChatColor.LIGHT_PURPLE;
             case WARN:
                 return ChatColor.YELLOW;
             default:

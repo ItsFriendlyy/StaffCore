@@ -966,7 +966,7 @@ public class UtilityCommands implements CommandExecutor {
             }
         }
 
-        String itemName = mat.name().toLowerCase().replace("_", " ");
+        String itemName = mat.name().toLowerCase().replace("legacy_", "").replace("_", " ");
 
         if (args[0].equals("*")) {
             int count = 0;
@@ -1001,10 +1001,51 @@ public class UtilityCommands implements CommandExecutor {
         return true;
     }
 
+    /**
+     * Resolves ALL materials across 1.8.8 - 1.21+, including Netherite items, Tridents, Maces, etc.,
+     * bypassing Spigot's legacy Commodore filter via reflection.
+     */
+    public static Material[] getAllRuntimeMaterials() {
+        try {
+            Material[] constants = Material.class.getEnumConstants();
+            if (constants != null && constants.length > 0) {
+                return constants;
+            }
+        } catch (Throwable ignored) {}
+        return Material.values();
+    }
+
     public static Material matchEasyMaterial(String input) {
         if (input == null || input.trim().isEmpty()) return null;
         String clean = input.trim().toUpperCase().replace("MINECRAFT:", "").replace(" ", "_");
+        if (clean.contains("NETHERRITE")) {
+            clean = clean.replace("NETHERRITE", "NETHERITE");
+        }
 
+        // 1. Try Spigot 1.13+ non-legacy matchMaterial(name, false) via reflection first (supports Netherite & 1.13-1.21+ items!)
+        try {
+            Method matchModern = Material.class.getMethod("matchMaterial", String.class, boolean.class);
+            Material m = (Material) matchModern.invoke(null, clean, false);
+            if (m != null) return m;
+        } catch (Throwable ignored) {}
+
+        // 2. Try Spigot 1.13+ getMaterial(name, false) via reflection
+        try {
+            Method getModern = Material.class.getMethod("getMaterial", String.class, boolean.class);
+            Material m = (Material) getModern.invoke(null, clean, false);
+            if (m != null) return m;
+        } catch (Throwable ignored) {}
+
+        // 3. Scan actual runtime enum constants directly (bypasses Commodore legacy filter)
+        Material[] allMaterials = getAllRuntimeMaterials();
+        for (Material m : allMaterials) {
+            if (m.name().startsWith("LEGACY_")) continue;
+            if (m.name().equalsIgnoreCase(clean)) {
+                return m;
+            }
+        }
+
+        // 4. Direct matchMaterial / valueOf
         Material direct = Material.matchMaterial(clean);
         if (direct != null) return direct;
 
@@ -1012,7 +1053,9 @@ public class UtilityCommands implements CommandExecutor {
             return Material.valueOf(clean);
         } catch (IllegalArgumentException ignored) {}
 
-        switch (clean.toLowerCase().replace("_", "")) {
+        // 5. Common shorthand aliases (including Netherite shorthands)
+        String compact = clean.toLowerCase().replace("_", "");
+        switch (compact) {
             case "gap":
             case "gapple":
             case "goldenapple":
@@ -1020,54 +1063,83 @@ public class UtilityCommands implements CommandExecutor {
             case "egap":
             case "notchapple":
             case "enchantedgoldenapple":
-                try {
-                    return Material.valueOf("ENCHANTED_GOLDEN_APPLE");
-                } catch (IllegalArgumentException e) {
-                    return Material.GOLDEN_APPLE;
-                }
+                return findRuntimeMaterial("ENCHANTED_GOLDEN_APPLE", "GOLDEN_APPLE");
             case "totem":
             case "totemofundying":
-                try {
-                    return Material.valueOf("TOTEM_OF_UNDYING");
-                } catch (IllegalArgumentException e) {
-                    try {
-                        return Material.valueOf("TOTEM");
-                    } catch (IllegalArgumentException ignored) {}
-                }
-                break;
+                return findRuntimeMaterial("TOTEM_OF_UNDYING", "TOTEM");
             case "pearl":
             case "enderpearl":
                 return Material.ENDER_PEARL;
             case "xpbottle":
             case "expbottle":
             case "experiencebottle":
-                try {
-                    return Material.valueOf("EXPERIENCE_BOTTLE");
-                } catch (IllegalArgumentException e) {
-                    return Material.valueOf("EXP_BOTTLE");
-                }
+                return findRuntimeMaterial("EXPERIENCE_BOTTLE", "EXP_BOTTLE");
             case "commandblock":
             case "cmdblock":
-                try {
-                    return Material.valueOf("COMMAND_BLOCK");
-                } catch (IllegalArgumentException e) {
-                    return Material.valueOf("COMMAND");
-                }
+                return findRuntimeMaterial("COMMAND_BLOCK", "COMMAND");
             case "steak":
                 return Material.COOKED_BEEF;
+            case "netheritesword":
+                return findRuntimeMaterial("NETHERITE_SWORD", null);
+            case "netheritepick":
+            case "netheritepickaxe":
+                return findRuntimeMaterial("NETHERITE_PICKAXE", null);
+            case "netheriteaxe":
+                return findRuntimeMaterial("NETHERITE_AXE", null);
+            case "netheriteshovel":
+                return findRuntimeMaterial("NETHERITE_SHOVEL", null);
+            case "netheritehoe":
+                return findRuntimeMaterial("NETHERITE_HOE", null);
+            case "netheritehelmet":
+                return findRuntimeMaterial("NETHERITE_HELMET", null);
+            case "netheritechestplate":
+            case "netheritechest":
+                return findRuntimeMaterial("NETHERITE_CHESTPLATE", null);
+            case "netheriteleggings":
+            case "netheritelegs":
+                return findRuntimeMaterial("NETHERITE_LEGGINGS", null);
+            case "netheriteboots":
+                return findRuntimeMaterial("NETHERITE_BOOTS", null);
+            case "netheriteingot":
+                return findRuntimeMaterial("NETHERITE_INGOT", null);
+            case "netheritescrap":
+                return findRuntimeMaterial("NETHERITE_SCRAP", null);
+            case "netheriteblock":
+                return findRuntimeMaterial("NETHERITE_BLOCK", null);
+            case "ancientdebris":
+            case "debris":
+                return findRuntimeMaterial("ANCIENT_DEBRIS", null);
             default:
                 break;
         }
 
-        String stripped = clean.replace("_", "");
-        for (Material m : Material.values()) {
-            if (m.name().replace("_", "").equalsIgnoreCase(stripped)) {
+        // 6. Fuzzy match against all non-legacy runtime enum constants
+        for (Material m : allMaterials) {
+            if (m.name().startsWith("LEGACY_")) continue;
+            if (m.name().replace("_", "").equalsIgnoreCase(compact)) {
                 return m;
             }
         }
-        for (Material m : Material.values()) {
+        for (Material m : allMaterials) {
+            if (m.name().startsWith("LEGACY_")) continue;
             if (m.name().toLowerCase().startsWith(clean.toLowerCase())) {
                 return m;
+            }
+        }
+        return null;
+    }
+
+    private static Material findRuntimeMaterial(String primary, String fallback) {
+        for (Material m : getAllRuntimeMaterials()) {
+            if (primary != null && m.name().equalsIgnoreCase(primary)) {
+                return m;
+            }
+        }
+        if (fallback != null) {
+            for (Material m : getAllRuntimeMaterials()) {
+                if (m.name().equalsIgnoreCase(fallback)) {
+                    return m;
+                }
             }
         }
         return null;

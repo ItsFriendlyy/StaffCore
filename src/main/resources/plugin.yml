@@ -1,8 +1,9 @@
 name: StaffCore
-version: 1.2
+version: 1.2.1
 main: com.github.staffcore.StaffCore
+api-version: 1.13
 author: StaffCoreDev
-description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, BungeeCord, and Utilities.
+description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, Jail, BungeeCord, and Utilities.
 
 commands:
   ban:
@@ -49,6 +50,26 @@ commands:
     description: Warns a player.
     usage: /warn <player> [reason] [-s]
     permission: staffcore.command.warn
+  setjail:
+    description: Sets a jail spawn location at your current position.
+    usage: /setjail <jail_name>
+    permission: staffcore.command.setjail
+  deljail:
+    description: Deletes an existing jail location.
+    usage: /deljail <jail_name>
+    permission: staffcore.command.setjail
+  jail:
+    description: Permanently jails a player at a specified jail.
+    usage: /jail <player> <jail_name> [reason] [-s]
+    permission: staffcore.command.jail
+  tempjail:
+    description: Temporarily jails a player at a specified jail.
+    usage: /tempjail <player> <jail_name> <duration> [reason] [-s]
+    permission: staffcore.command.tempjail
+  unjail:
+    description: Releases a jailed player.
+    usage: /unjail <player>
+    permission: staffcore.command.unjail
   freeze:
     description: Toggles freeze on a player for staff inspection.
     usage: /freeze <player>
@@ -191,6 +212,18 @@ permissions:
   staffcore.command.warn:
     description: Allows warning players.
     default: op
+  staffcore.command.setjail:
+    description: Allows creating and deleting jail locations.
+    default: op
+  staffcore.command.jail:
+    description: Allows permanently jailing players.
+    default: op
+  staffcore.command.tempjail:
+    description: Allows temporarily jailing players.
+    default: op
+  staffcore.command.unjail:
+    description: Allows releasing players from jail.
+    default: op
   staffcore.command.freeze:
     description: Allows freezing players.
     default: op
@@ -280,9 +313,12 @@ permissions:
     default: op
   staffcore.bypass.ban:
     description: Protects a player from being banned or temp-banned.
-    default: op
+    default: false
   staffcore.bypass.mute:
     description: Protects a player from being muted or temp-muted.
+    default: op
+  staffcore.bypass.jail:
+    description: Protects a player from being jailed.
     default: op
   staffcore.bypass.freeze:
     description: Protects a player from being frozen.

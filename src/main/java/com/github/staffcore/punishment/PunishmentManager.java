@@ -4,10 +4,13 @@ import com.github.staffcore.StaffCore;
 import com.github.staffcore.database.DatabaseManager;
 import com.github.staffcore.util.TimeUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,11 +22,19 @@ public class PunishmentManager {
     private final File file;
     private FileConfiguration data;
     private DatabaseManager databaseManager;
+    private BukkitTask jailCheckTask;
 
     private final List<Punishment> punishments = new ArrayList<>();
     private final Map<UUID, String> ipHistory = new HashMap<>();
     private final Map<UUID, String> uuidToName = new HashMap<>();
     private final Map<String, String> nameToIpHistory = new HashMap<>();
+
+    // Jail storage: jailName (lowercase) -> Location
+    private final Map<String, Location> jails = new HashMap<>();
+    // Jailed player UUID -> jailName
+    private final Map<UUID, String> playerJailMap = new HashMap<>();
+    // Jailed player UUID -> previous location before being jailed
+    private final Map<UUID, Location> previousLocations = new HashMap<>();
 
     public PunishmentManager(StaffCore plugin) {
         this.plugin = plugin;
@@ -38,6 +49,22 @@ public class PunishmentManager {
         }
 
         loadData();
+        startJailExpiryTask();
+    }
+
+    private void startJailExpiryTask() {
+        if (jailCheckTask != null) {
+            jailCheckTask.cancel();
+        }
+        jailCheckTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                UUID uuid = online.getUniqueId();
+                if (playerJailMap.containsKey(uuid)) {
+                    // Automatically unjails if expired
+                    getActiveJail(uuid);
+                }
+            }
+        }, 20L, 20L);
     }
 
     public DatabaseManager getDatabaseManager() {
@@ -53,6 +80,9 @@ public class PunishmentManager {
         ipHistory.clear();
         uuidToName.clear();
         nameToIpHistory.clear();
+        jails.clear();
+        playerJailMap.clear();
+        previousLocations.clear();
 
         // 1. Load punishments from punishments.yml
         ConfigurationSection section = data.getConfigurationSection("punishments");
@@ -98,6 +128,35 @@ public class PunishmentManager {
             }
         }
 
+        // 3. Load saved jails
+        ConfigurationSection jailSection = data.getConfigurationSection("jails");
+        if (jailSection != null) {
+            for (String jailName : jailSection.getKeys(false)) {
+                Location loc = deserializeLocation(jailSection.getConfigurationSection(jailName));
+                if (loc != null) {
+                    jails.put(jailName.toLowerCase(), loc);
+                }
+            }
+        }
+
+        // 4. Load active player jail assignments
+        ConfigurationSection activeJailSec = data.getConfigurationSection("active-jails");
+        if (activeJailSec != null) {
+            for (String uuidStr : activeJailSec.getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(uuidStr);
+                    String jailName = activeJailSec.getString(uuidStr + ".jail", "");
+                    if (!jailName.isEmpty()) {
+                        playerJailMap.put(uuid, jailName.toLowerCase());
+                    }
+                    Location prev = deserializeLocation(activeJailSec.getConfigurationSection(uuidStr + ".prev"));
+                    if (prev != null) {
+                        previousLocations.put(uuid, prev);
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
         // Also cache any currently online players
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (p.getAddress() != null && p.getAddress().getAddress() != null) {
@@ -132,12 +191,191 @@ public class PunishmentManager {
             }
         }
 
+        data.set("jails", null);
+        for (Map.Entry<String, Location> entry : jails.entrySet()) {
+            serializeLocation("jails." + entry.getKey(), entry.getValue());
+        }
+
+        data.set("active-jails", null);
+        for (Map.Entry<UUID, String> entry : playerJailMap.entrySet()) {
+            String base = "active-jails." + entry.getKey().toString();
+            data.set(base + ".jail", entry.getValue());
+            Location prev = previousLocations.get(entry.getKey());
+            if (prev != null) {
+                serializeLocation(base + ".prev", prev);
+            }
+        }
+
         try {
             data.save(file);
         } catch (IOException e) {
             plugin.getLogger().severe("Could not save punishments.yml: " + e.getMessage());
         }
     }
+
+    private void serializeLocation(String path, Location loc) {
+        if (loc == null || loc.getWorld() == null) return;
+        data.set(path + ".world", loc.getWorld().getName());
+        data.set(path + ".x", loc.getX());
+        data.set(path + ".y", loc.getY());
+        data.set(path + ".z", loc.getZ());
+        data.set(path + ".yaw", (double) loc.getYaw());
+        data.set(path + ".pitch", (double) loc.getPitch());
+    }
+
+    private Location deserializeLocation(ConfigurationSection sec) {
+        if (sec == null) return null;
+        String worldName = sec.getString("world");
+        if (worldName == null) return null;
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) return null;
+        double x = sec.getDouble("x");
+        double y = sec.getDouble("y");
+        double z = sec.getDouble("z");
+        float yaw = (float) sec.getDouble("yaw");
+        float pitch = (float) sec.getDouble("pitch");
+        return new Location(world, x, y, z, yaw, pitch);
+    }
+
+    // =========================================================================
+    //                          JAIL MANAGEMENT
+    // =========================================================================
+
+    public void setJailLocation(String jailName, Location location) {
+        if (jailName == null || location == null) return;
+        jails.put(jailName.toLowerCase(), location.clone());
+        saveData();
+    }
+
+    public boolean deleteJail(String jailName) {
+        if (jailName == null) return false;
+        boolean removed = jails.remove(jailName.toLowerCase()) != null;
+        if (removed) saveData();
+        return removed;
+    }
+
+    public Location getJailLocation(String jailName) {
+        if (jailName == null) return null;
+        Location loc = jails.get(jailName.toLowerCase());
+        return loc != null ? loc.clone() : null;
+    }
+
+    public Set<String> getJailNames() {
+        return Collections.unmodifiableSet(jails.keySet());
+    }
+
+    public Location getAssignedJailLocation(UUID targetUUID) {
+        if (targetUUID == null) return null;
+        String jailName = playerJailMap.get(targetUUID);
+        if (jailName != null) {
+            Location loc = getJailLocation(jailName);
+            if (loc != null) return loc;
+        }
+        if (!jails.isEmpty()) {
+            return jails.values().iterator().next().clone();
+        }
+        return null;
+    }
+
+    public Punishment jailPlayer(UUID targetUUID, String targetName, String jailName,
+                                 String staffName, String reason, long duration, boolean silent) {
+        String cleanJail = jailName.toLowerCase();
+        Location jailLoc = getJailLocation(cleanJail);
+
+        // Deactivate any previous active jail records for this player
+        for (Punishment existing : punishments) {
+            if (existing.getTargetUUID() != null && existing.getTargetUUID().equals(targetUUID) && existing.isActive() &&
+                (existing.getType() == PunishmentType.JAIL || existing.getType() == PunishmentType.TEMP_JAIL)) {
+                existing.setActive(false);
+            }
+        }
+
+        Player online = targetUUID != null ? Bukkit.getPlayer(targetUUID) : Bukkit.getPlayerExact(targetName);
+        if (online != null && online.isOnline()) {
+            if (!previousLocations.containsKey(online.getUniqueId())) {
+                previousLocations.put(online.getUniqueId(), online.getLocation().clone());
+            }
+            if (jailLoc != null) {
+                online.teleport(jailLoc);
+            }
+            String timeStr = duration > 0 ? TimeUtil.formatDuration(duration) : "Permanent";
+            online.sendMessage(plugin.getMessageManager().color("&c&m--------------------------------------------------"));
+            online.sendMessage(plugin.getMessageManager().color("&c&lYOU HAVE BEEN JAILED! &7(Jail: &e" + cleanJail + "&7)"));
+            online.sendMessage(plugin.getMessageManager().color("&7Staff: &f" + staffName));
+            online.sendMessage(plugin.getMessageManager().color("&7Reason: &f" + reason));
+            online.sendMessage(plugin.getMessageManager().color("&7Duration: &e" + timeStr));
+            online.sendMessage(plugin.getMessageManager().color("&c&m--------------------------------------------------"));
+        }
+
+        if (targetUUID != null) {
+            playerJailMap.put(targetUUID, cleanJail);
+        }
+
+        String ip = (online != null && online.getAddress() != null && online.getAddress().getAddress() != null)
+                ? online.getAddress().getAddress().getHostAddress() : getLastKnownIp(targetUUID);
+        PunishmentType type = duration > 0 ? PunishmentType.TEMP_JAIL : PunishmentType.JAIL;
+        return createPunishment(targetUUID, targetName, ip != null ? ip : "", staffName, type, reason, duration, silent);
+    }
+
+    public boolean unjail(UUID targetUUID) {
+        if (targetUUID == null) return false;
+        boolean changed = false;
+        for (Punishment p : punishments) {
+            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) && p.isActive() &&
+                (p.getType() == PunishmentType.JAIL || p.getType() == PunishmentType.TEMP_JAIL)) {
+                p.setActive(false);
+                changed = true;
+            }
+        }
+        if (playerJailMap.remove(targetUUID) != null) {
+            changed = true;
+        }
+        Location prev = previousLocations.remove(targetUUID);
+        if (changed) {
+            saveData();
+            Player online = Bukkit.getPlayer(targetUUID);
+            if (online != null && online.isOnline()) {
+                if (prev != null && prev.getWorld() != null) {
+                    online.teleport(prev);
+                } else if (!Bukkit.getWorlds().isEmpty()) {
+                    online.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
+                }
+                online.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aYou have been released from jail!"));
+            }
+        }
+        return changed;
+    }
+
+    public Punishment getActiveJail(UUID targetUUID) {
+        if (targetUUID == null) return null;
+        for (Punishment p : punishments) {
+            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) && p.isActive() &&
+                (p.getType() == PunishmentType.JAIL || p.getType() == PunishmentType.TEMP_JAIL)) {
+                if (p.isExpired()) {
+                    unjail(targetUUID);
+                    return null;
+                }
+                return p;
+            }
+        }
+        return null;
+    }
+
+    public int getJailCount(UUID targetUUID) {
+        if (targetUUID == null) return 0;
+        int count = 0;
+        for (Punishment p : punishments) {
+            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) &&
+                (p.getType() == PunishmentType.JAIL || p.getType() == PunishmentType.TEMP_JAIL)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    // =========================================================================
+    //                        IP & PUNISHMENT METHODS
+    // =========================================================================
 
     public void cachePlayerIp(UUID uuid, String name, String ip) {
         if (uuid == null || ip == null || ip.isEmpty()) return;
@@ -159,15 +397,11 @@ public class PunishmentManager {
         return nameToIpHistory.get(name.toLowerCase());
     }
 
-    /**
-     * Returns all known account names that have logged in from the specified IP address.
-     */
     public List<String> getAccountsByIp(String ip) {
         if (ip == null || ip.trim().isEmpty()) return Collections.emptyList();
         String cleanIp = ip.trim();
         Set<String> accounts = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
-        // 1. Check IP history map
         for (Map.Entry<UUID, String> entry : ipHistory.entrySet()) {
             if (cleanIp.equalsIgnoreCase(entry.getValue())) {
                 String name = uuidToName.get(entry.getKey());
@@ -182,14 +416,12 @@ public class PunishmentManager {
             }
         }
 
-        // 2. Check nameToIpHistory map
         for (Map.Entry<String, String> entry : nameToIpHistory.entrySet()) {
             if (cleanIp.equalsIgnoreCase(entry.getValue())) {
                 accounts.add(entry.getKey());
             }
         }
 
-        // 3. Check punishment records
         for (Punishment p : punishments) {
             if (p.getTargetIp() != null && cleanIp.equalsIgnoreCase(p.getTargetIp())) {
                 if (p.getTargetName() != null && !p.getTargetName().isEmpty() && !p.getTargetName().equalsIgnoreCase("Unknown")) {
@@ -198,7 +430,6 @@ public class PunishmentManager {
             }
         }
 
-        // 4. Check currently online players
         for (Player online : Bukkit.getOnlinePlayers()) {
             if (online.getAddress() != null && online.getAddress().getAddress() != null) {
                 if (cleanIp.equalsIgnoreCase(online.getAddress().getAddress().getHostAddress())) {
@@ -210,9 +441,6 @@ public class PunishmentManager {
         return new ArrayList<>(accounts);
     }
 
-    /**
-     * Returns all punishments recorded for a specific player UUID (used by CheckGui)
-     */
     public List<Punishment> getAllPunishments(UUID targetUUID) {
         if (targetUUID == null) return Collections.emptyList();
         List<Punishment> list = new ArrayList<>();
@@ -224,9 +452,6 @@ public class PunishmentManager {
         return list;
     }
 
-    /**
-     * Returns all punishments across the entire server
-     */
     public List<Punishment> getAllPunishments() {
         return Collections.unmodifiableList(punishments);
     }
@@ -282,7 +507,6 @@ public class PunishmentManager {
                 }
             }
 
-            // Auto-ban when reaching threshold (default 3 warnings), using the final warning's reason as the ban reason
             if (maxWarnings > 0 && targetUUID != null && activeWarns >= maxWarnings) {
                 clearActiveWarnings(targetUUID);
                 String resolvedIp = (targetIp != null && !targetIp.isEmpty()) ? targetIp : getLastKnownIp(targetUUID);
@@ -329,9 +553,6 @@ public class PunishmentManager {
         return changed;
     }
 
-    /**
-     * Unbans an IP address by the player's In-Game Name (IGN) or direct IP.
-     */
     public String unbanIpByIgn(String ignOrIp) {
         if (ignOrIp == null || ignOrIp.trim().isEmpty()) return null;
         String input = ignOrIp.trim();
@@ -481,13 +702,9 @@ public class PunishmentManager {
         return count;
     }
 
-    /**
-     * Collects all currently banned player names from StaffCore and Bukkit's ban list.
-     */
     public List<String> getBannedPlayerNames() {
         Set<String> banned = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
-        // 1. StaffCore internal active bans
         for (Punishment p : punishments) {
             if (p.isActive() && (p.getType() == PunishmentType.BAN || p.getType() == PunishmentType.TEMPBAN)) {
                 if (p.isExpired()) {
@@ -500,7 +717,6 @@ public class PunishmentManager {
             }
         }
 
-        // 2. Bukkit native BanList (BanList.Type.NAME)
         try {
             for (org.bukkit.BanEntry entry : Bukkit.getBanList(org.bukkit.BanList.Type.NAME).getBanEntries()) {
                 if (entry != null && entry.getTarget() != null) {
@@ -509,7 +725,6 @@ public class PunishmentManager {
             }
         } catch (Throwable ignored) {}
 
-        // 3. Bukkit getBannedPlayers() for older Spigot compatibility
         try {
             for (org.bukkit.OfflinePlayer op : Bukkit.getBannedPlayers()) {
                 if (op != null && op.getName() != null) {
@@ -521,13 +736,9 @@ public class PunishmentManager {
         return new ArrayList<>(banned);
     }
 
-    /**
-     * Collects all currently IP-banned player names and raw IP addresses.
-     */
     public List<String> getIpBannedNamesOrIps() {
         Set<String> ipBanned = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
-        // 1. StaffCore internal active IP bans
         for (Punishment p : punishments) {
             if (p.isActive() && (p.getType() == PunishmentType.IP_BAN || p.getType() == PunishmentType.TEMP_IP_BAN)) {
                 if (p.isExpired()) {
@@ -543,7 +754,6 @@ public class PunishmentManager {
             }
         }
 
-        // 2. Bukkit IP ban list
         try {
             for (org.bukkit.BanEntry entry : Bukkit.getBanList(org.bukkit.BanList.Type.IP).getBanEntries()) {
                 if (entry != null && entry.getTarget() != null) {
@@ -583,7 +793,15 @@ public class PunishmentManager {
         if (silent) {
             String formatKey = "broadcasts.silent." + p.getType().name().toLowerCase().replace("_", "");
             String msg = plugin.getConfig().getString(formatKey);
-            if (msg == null) msg = plugin.getConfig().getString("broadcasts.silent.ban", "&8[&cSilent&8] &7%staff% punished %target% for: %reason%");
+            if (msg == null) {
+                if (p.getType() == PunishmentType.JAIL) {
+                    msg = "&8[&cSilent&8] &7%staff% permanently jailed &e%target% &7for: &f%reason%";
+                } else if (p.getType() == PunishmentType.TEMP_JAIL) {
+                    msg = "&8[&cSilent&8] &7%staff% temp-jailed &e%target% &7for &e%duration% &7for: &f%reason%";
+                } else {
+                    msg = plugin.getConfig().getString("broadcasts.silent.ban", "&8[&cSilent&8] &7%staff% punished %target% for: %reason%");
+                }
+            }
 
             String formatted = plugin.getMessageManager().color(msg
                     .replace("%target%", p.getTargetName())
@@ -601,7 +819,15 @@ public class PunishmentManager {
         } else {
             String formatKey = "broadcasts.public." + p.getType().name().toLowerCase().replace("_", "");
             String msg = plugin.getConfig().getString(formatKey);
-            if (msg == null) msg = plugin.getConfig().getString("broadcasts.public.ban", "&c&lPUNISH &8» &f%target% was punished by &f%staff% for: %reason%");
+            if (msg == null) {
+                if (p.getType() == PunishmentType.JAIL) {
+                    msg = "&c&lJAIL &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%";
+                } else if (p.getType() == PunishmentType.TEMP_JAIL) {
+                    msg = "&c&lJAIL &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%";
+                } else {
+                    msg = plugin.getConfig().getString("broadcasts.public.ban", "&c&lPUNISH &8» &f%target% was punished by &f%staff% for: %reason%");
+                }
+            }
 
             String formatted = plugin.getMessageManager().color(msg
                     .replace("%target%", p.getTargetName())

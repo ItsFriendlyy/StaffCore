@@ -7,5 +7,7 @@ public enum PunishmentType {
     TEMP_IP_BAN,
     MUTE,
     TEMP_MUTE,
+    JAIL,
+    TEMP_JAIL,
     WARN
 }

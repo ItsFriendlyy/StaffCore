@@ -52,10 +52,59 @@ public class StaffTabCompleter implements TabCompleter {
             return completions;
         }
 
-        // 2. /vanish, /repair, /cleargrounditems
-        if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") ||
+        // 2. /vanish, /repair, /cleargrounditems, /setjail
+        if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") || cmd.equals("setjail") ||
             cmd.equals("cleargrounditems") || cmd.equals("cleargrouditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
             return Collections.emptyList();
+        }
+
+        // 2b. /deljail <jail_name>
+        if (cmd.equals("deljail")) {
+            if (args.length == 1) {
+                return getJailNameCompletions(args[0]);
+            }
+            return Collections.emptyList();
+        }
+
+        // 2c. /jail <player> <jail_name> [reason] [-s]
+        if (cmd.equals("jail")) {
+            if (args.length == 1) {
+                return getPlayerNameCompletions(args[0], false);
+            } else if (args.length == 2) {
+                return getJailNameCompletions(args[1]);
+            } else if (args.length == 3) {
+                List<String> options = new ArrayList<>(REASONS);
+                options.add("-s");
+                StringUtil.copyPartialMatches(args[2], options, completions);
+                return completions;
+            } else {
+                if (!args[args.length - 2].equalsIgnoreCase("-s")) {
+                    StringUtil.copyPartialMatches(args[args.length - 1], Collections.singletonList("-s"), completions);
+                }
+                return completions;
+            }
+        }
+
+        // 2d. /tempjail <player> <jail_name> <duration> [reason] [-s]
+        if (cmd.equals("tempjail")) {
+            if (args.length == 1) {
+                return getPlayerNameCompletions(args[0], false);
+            } else if (args.length == 2) {
+                return getJailNameCompletions(args[1]);
+            } else if (args.length == 3) {
+                StringUtil.copyPartialMatches(args[2], DURATIONS, completions);
+                return completions;
+            } else if (args.length == 4) {
+                List<String> options = new ArrayList<>(REASONS);
+                options.add("-s");
+                StringUtil.copyPartialMatches(args[3], options, completions);
+                return completions;
+            } else {
+                if (!args[args.length - 2].equalsIgnoreCase("-s")) {
+                    StringUtil.copyPartialMatches(args[args.length - 1], Collections.singletonList("-s"), completions);
+                }
+                return completions;
+            }
         }
 
         // 3. /enchant tab completion (all Minecraft enchantments + suggestions up to 255)
@@ -92,18 +141,24 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 4. /give <player|*> <item> [amount]
+        // 4. /give <player|*> <item> [amount] (includes ALL runtime 1.8 - 1.21+ items & Netherite)
         if (cmd.equals("give")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], true);
             } else if (args.length == 2) {
                 Set<String> itemNames = new TreeSet<>();
-                for (Material m : Material.values()) {
-                    if (m != Material.AIR) {
+                for (Material m : UtilityCommands.getAllRuntimeMaterials()) {
+                    if (m != null && m != Material.AIR && !m.name().startsWith("LEGACY_")) {
                         itemNames.add(m.name().toLowerCase());
                     }
                 }
-                itemNames.addAll(Arrays.asList("golden_apple", "enchanted_golden_apple", "totem_of_undying", "ender_pearl", "experience_bottle", "command_block", "steak"));
+                itemNames.addAll(Arrays.asList(
+                    "netherite_sword", "netherite_pickaxe", "netherite_axe", "netherite_shovel", "netherite_hoe",
+                    "netherite_helmet", "netherite_chestplate", "netherite_leggings", "netherite_boots",
+                    "netherite_ingot", "netherite_scrap", "netherite_block", "netherite_upgrade_smithing_template",
+                    "ancient_debris", "trident", "crossbow", "elytra", "mace", "wind_charge", "heavy_core",
+                    "golden_apple", "enchanted_golden_apple", "totem_of_undying", "ender_pearl", "experience_bottle", "command_block", "steak"
+                ));
                 StringUtil.copyPartialMatches(args[1].toLowerCase(), itemNames, completions);
                 return completions;
             } else if (args.length == 3) {
@@ -159,8 +214,8 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 7. Single-player only commands (NO wildcard *): /invsee, /check, /tpall, /freeze, /unmute
-        if (cmd.equals("invsee") || cmd.equals("check") || cmd.equals("tpall") || cmd.equals("freeze") || cmd.equals("unmute")) {
+        // 7. Single-player only commands (NO wildcard *): /invsee, /check, /tpall, /freeze, /unmute, /unjail
+        if (cmd.equals("invsee") || cmd.equals("check") || cmd.equals("tpall") || cmd.equals("freeze") || cmd.equals("unmute") || cmd.equals("unjail")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], false);
             }
@@ -258,6 +313,18 @@ public class StaffTabCompleter implements TabCompleter {
         }
 
         return completions;
+    }
+
+    private List<String> getJailNameCompletions(String prefix) {
+        List<String> matches = new ArrayList<>();
+        try {
+            StaffCore core = (this.plugin != null) ? this.plugin : JavaPlugin.getPlugin(StaffCore.class);
+            if (core != null && core.getPunishmentManager() != null) {
+                StringUtil.copyPartialMatches(prefix.toLowerCase(), core.getPunishmentManager().getJailNames(), matches);
+                Collections.sort(matches);
+            }
+        } catch (Throwable ignored) {}
+        return matches;
     }
 
     private List<String> getPlayerNameCompletions(String prefix, boolean includeWildcard) {
