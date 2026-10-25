@@ -30,13 +30,21 @@ public class GuiListener implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent event) {
         String title = event.getView().getTitle();
-        if (title != null && title.startsWith(CheckGui.GUI_TITLE_PREFIX)) {
+        if (title == null) return;
+
+        // 1. Main /check GUI
+        if (title.startsWith(CheckGui.GUI_TITLE_PREFIX)) {
             event.setCancelled(true);
 
             if (!(event.getWhoClicked() instanceof Player)) {
                 return;
             }
             Player staff = (Player) event.getWhoClicked();
+            String targetName = ChatColor.stripColor(title.substring(CheckGui.GUI_TITLE_PREFIX.length())).trim();
+            Player onlineTarget = Bukkit.getPlayerExact(targetName);
+            @SuppressWarnings("deprecation")
+            OfflinePlayer target = onlineTarget != null ? onlineTarget : Bukkit.getOfflinePlayer(targetName);
+            StaffCore core = (this.plugin != null) ? this.plugin : JavaPlugin.getPlugin(StaffCore.class);
 
             // Slot 4: Player Skull - Right-click to reveal/hide IP address
             if (event.getRawSlot() == 4 && event.isRightClick()) {
@@ -61,19 +69,40 @@ public class GuiListener implements Listener {
                     }
                 }
 
-                String targetName = ChatColor.stripColor(title.substring(CheckGui.GUI_TITLE_PREFIX.length())).trim();
-                Player onlineTarget = Bukkit.getPlayerExact(targetName);
-                @SuppressWarnings("deprecation")
-                OfflinePlayer target = onlineTarget != null ? onlineTarget : Bukkit.getOfflinePlayer(targetName);
-
-                StaffCore core = (this.plugin != null) ? this.plugin : JavaPlugin.getPlugin(StaffCore.class);
                 CheckGui.openGui(core, staff, target, currentlyHidden);
+                return;
+            }
+
+            // Slot 14: Punishment History - Click to open full punishment reasons list
+            if (event.getRawSlot() == 14) {
+                CheckGui.openHistoryGui(core, staff, target);
                 return;
             }
 
             // Slot 22: Barrier close slot
             if (event.getRawSlot() == 22) {
                 staff.closeInventory();
+            }
+            return;
+        }
+
+        // 2. Detailed Punishment History GUI
+        if (title.startsWith(CheckGui.HISTORY_TITLE_PREFIX)) {
+            event.setCancelled(true);
+
+            if (!(event.getWhoClicked() instanceof Player)) {
+                return;
+            }
+            Player staff = (Player) event.getWhoClicked();
+
+            // Slot 49: Back to /check button
+            if (event.getRawSlot() == 49) {
+                String targetName = ChatColor.stripColor(title.substring(CheckGui.HISTORY_TITLE_PREFIX.length())).trim();
+                Player onlineTarget = Bukkit.getPlayerExact(targetName);
+                @SuppressWarnings("deprecation")
+                OfflinePlayer target = onlineTarget != null ? onlineTarget : Bukkit.getOfflinePlayer(targetName);
+                StaffCore core = (this.plugin != null) ? this.plugin : JavaPlugin.getPlugin(StaffCore.class);
+                CheckGui.openGui(core, staff, target, false);
             }
         }
     }

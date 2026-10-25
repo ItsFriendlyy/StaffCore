@@ -1,5 +1,5 @@
 name: StaffCore
-version: 1.1
+version: 1.2
 main: com.github.staffcore.StaffCore
 author: StaffCoreDev
 description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, BungeeCord, and Utilities.
@@ -35,23 +35,23 @@ commands:
     permission: staffcore.command.unbanip
   mute:
     description: Permanently mutes a player.
-    usage: /mute <player|*> [reason] [-s]
+    usage: /mute <player> [reason] [-s]
     permission: staffcore.command.mute
   tempmute:
     description: Temporarily mutes a player.
-    usage: /tempmute <player|*> <duration> [reason] [-s]
+    usage: /tempmute <player> <duration> [reason] [-s]
     permission: staffcore.command.tempmute
   unmute:
     description: Unmutes a muted player.
-    usage: /unmute <player|*>
+    usage: /unmute <player>
     permission: staffcore.command.unmute
   warn:
     description: Warns a player.
-    usage: /warn <player|*> [reason] [-s]
+    usage: /warn <player> [reason] [-s]
     permission: staffcore.command.warn
   freeze:
     description: Toggles freeze on a player for staff inspection.
-    usage: /freeze <player|*>
+    usage: /freeze <player>
     permission: staffcore.command.freeze
   check:
     description: Opens an inspection GUI showing player stats and punishment history.

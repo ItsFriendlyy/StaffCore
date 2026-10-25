@@ -25,3 +25,4 @@ com/github/staffcore/listeners/UtilityListener.class
 com/github/staffcore/util/UpdateChecker.class
 com/github/staffcore/vanish/VanishManager.class
 com/github/staffcore/punishment/PunishmentManager.class
+com/github/staffcore/gui/CheckGui$1.class

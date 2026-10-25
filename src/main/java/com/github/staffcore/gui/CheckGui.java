@@ -2,6 +2,7 @@ package com.github.staffcore.gui;
 
 import com.github.staffcore.StaffCore;
 import com.github.staffcore.punishment.Punishment;
+import com.github.staffcore.punishment.PunishmentType;
 import com.github.staffcore.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -15,13 +16,17 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 
 import java.lang.reflect.Method;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 public class CheckGui {
 
     public static final String GUI_TITLE_PREFIX = ChatColor.DARK_GRAY + "Check: " + ChatColor.RED;
+    public static final String HISTORY_TITLE_PREFIX = ChatColor.DARK_GRAY + "History: " + ChatColor.RED;
 
     public static void openGui(StaffCore plugin, Player staff, OfflinePlayer target) {
         openGui(plugin, staff, target, false);
@@ -139,22 +144,45 @@ public class CheckGui {
                         ChatColor.GRAY + "K/D Ratio: " + ChatColor.GOLD + kd
                 )));
 
-        // Punishment History counts
+        // Punishment History counts & reasons
         int totalBans = plugin.getPunishmentManager().getBanCount(target.getUniqueId());
         int totalMutes = plugin.getPunishmentManager().getMuteCount(target.getUniqueId());
         int totalWarns = plugin.getPunishmentManager().getWarnCount(target.getUniqueId());
         int activeWarns = plugin.getPunishmentManager().getActiveWarnCount(target.getUniqueId());
         int maxWarns = plugin.getConfig().getInt("warning.max-warnings", 3);
 
+        List<Punishment> history = getPlayerPunishments(plugin, target, targetName);
+        List<String> historyLore = new ArrayList<>();
+        historyLore.add(ChatColor.GRAY + "Times Banned: " + (totalBans > 0 ? ChatColor.RED : ChatColor.GREEN) + totalBans);
+        historyLore.add(ChatColor.GRAY + "Times Muted: " + (totalMutes > 0 ? ChatColor.GOLD : ChatColor.GREEN) + totalMutes);
+        historyLore.add(ChatColor.GRAY + "Active Warnings: " + (activeWarns > 0 ? ChatColor.YELLOW : ChatColor.GREEN) + activeWarns + (maxWarns > 0 ? "/" + maxWarns : ""));
+        historyLore.add(ChatColor.GRAY + "Total Warnings: " + (totalWarns > 0 ? ChatColor.YELLOW : ChatColor.GREEN) + totalWarns);
+
+        if (!history.isEmpty()) {
+            historyLore.add("");
+            historyLore.add(ChatColor.GOLD + "" + ChatColor.BOLD + "Recent Punishments (Reasons):");
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            int limit = Math.min(history.size(), 6);
+            for (int i = 0; i < limit; i++) {
+                Punishment p = history.get(i);
+                String dateStr = sdf.format(new Date(p.getTimestamp()));
+                historyLore.add(ChatColor.DARK_GRAY + "• " + formatTypeColor(p.getType()) + p.getType().name()
+                        + ChatColor.GRAY + " - " + ChatColor.WHITE + p.getReason()
+                        + ChatColor.DARK_GRAY + " (" + p.getStaffName() + ", " + dateStr + ")");
+            }
+            if (history.size() > limit) {
+                historyLore.add(ChatColor.DARK_GRAY + "  ...and " + (history.size() - limit) + " more.");
+            }
+            historyLore.add("");
+            historyLore.add(ChatColor.YELLOW + "Click to view full punishment history!");
+        } else {
+            historyLore.add("");
+            historyLore.add(ChatColor.GREEN + "No punishments on record.");
+        }
+
         // Slot 14: Book & Quill - Punishment History
         Material bookMat = matchCrossVersionMaterial("WRITABLE_BOOK", "BOOK_AND_QUILL");
-        inv.setItem(14, createItem(bookMat, ChatColor.AQUA + "" + ChatColor.BOLD + "Punishment History",
-                Arrays.asList(
-                        ChatColor.GRAY + "Times Banned: " + (totalBans > 0 ? ChatColor.RED : ChatColor.GREEN) + totalBans,
-                        ChatColor.GRAY + "Times Muted: " + (totalMutes > 0 ? ChatColor.GOLD : ChatColor.GREEN) + totalMutes,
-                        ChatColor.GRAY + "Active Warnings: " + (activeWarns > 0 ? ChatColor.YELLOW : ChatColor.GREEN) + activeWarns + (maxWarns > 0 ? "/" + maxWarns : ""),
-                        ChatColor.GRAY + "Total Warnings: " + (totalWarns > 0 ? ChatColor.YELLOW : ChatColor.GREEN) + totalWarns
-                )));
+        inv.setItem(14, createItem(bookMat, ChatColor.AQUA + "" + ChatColor.BOLD + "Punishment History", historyLore));
 
         // Active Status
         Punishment activeBan = plugin.getPunishmentManager().getActiveBan(target.getUniqueId());
@@ -166,11 +194,13 @@ public class CheckGui {
         statusLore.add(ChatColor.GRAY + "Currently Banned: " + (activeBan != null ? ChatColor.RED + "YES (" + activeBan.getType().name() + ")" : ChatColor.GREEN + "NO"));
         if (activeBan != null) {
             statusLore.add(ChatColor.DARK_RED + " » Reason: " + ChatColor.WHITE + activeBan.getReason());
+            statusLore.add(ChatColor.DARK_RED + " » By: " + ChatColor.YELLOW + activeBan.getStaffName());
             statusLore.add(ChatColor.DARK_RED + " » Remaining: " + ChatColor.YELLOW + TimeUtil.formatRemaining(activeBan.getExpireTime()));
         }
         statusLore.add(ChatColor.GRAY + "Currently Muted: " + (activeMute != null ? ChatColor.RED + "YES" : ChatColor.GREEN + "NO"));
         if (activeMute != null) {
             statusLore.add(ChatColor.GOLD + " » Reason: " + ChatColor.WHITE + activeMute.getReason());
+            statusLore.add(ChatColor.GOLD + " » By: " + ChatColor.YELLOW + activeMute.getStaffName());
             statusLore.add(ChatColor.GOLD + " » Remaining: " + ChatColor.YELLOW + TimeUtil.formatRemaining(activeMute.getExpireTime()));
         }
         statusLore.add(ChatColor.GRAY + "Currently Frozen: " + (isFrozen ? ChatColor.RED + "YES" : ChatColor.GREEN + "NO"));
@@ -183,6 +213,91 @@ public class CheckGui {
                 Arrays.asList(ChatColor.GRAY + "Click to close this window")));
 
         staff.openInventory(inv);
+    }
+
+    /**
+     * Opens a dedicated 54-slot GUI showing every punishment record and its reason for the target player.
+     */
+    public static void openHistoryGui(StaffCore plugin, Player staff, OfflinePlayer target) {
+        String targetName = target.getName() != null ? target.getName() : "Unknown";
+        Inventory inv = Bukkit.createInventory(null, 54, HISTORY_TITLE_PREFIX + targetName);
+
+        ItemStack filler = createGrayPane();
+        for (int i = 45; i < 54; i++) {
+            inv.setItem(i, filler);
+        }
+
+        List<Punishment> history = getPlayerPunishments(plugin, target, targetName);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+
+        int slot = 0;
+        for (Punishment p : history) {
+            if (slot >= 45) break;
+
+            Material icon = Material.PAPER;
+            if (p.getType() == PunishmentType.BAN || p.getType() == PunishmentType.TEMPBAN ||
+                p.getType() == PunishmentType.IP_BAN || p.getType() == PunishmentType.TEMP_IP_BAN) {
+                icon = Material.REDSTONE_BLOCK;
+            } else if (p.getType() == PunishmentType.MUTE || p.getType() == PunishmentType.TEMP_MUTE) {
+                icon = Material.BOOK;
+            }
+
+            boolean currentlyActive = p.isActive() && !p.isExpired();
+            String dateStr = sdf.format(new Date(p.getTimestamp()));
+            String durationStr = p.getDuration() > 0 ? TimeUtil.formatDuration(p.getDuration()) : "Permanent";
+
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Type: " + formatTypeColor(p.getType()) + p.getType().name());
+            lore.add(ChatColor.GRAY + "Reason: " + ChatColor.WHITE + p.getReason());
+            lore.add(ChatColor.GRAY + "Punished By: " + ChatColor.YELLOW + p.getStaffName());
+            lore.add(ChatColor.GRAY + "Date: " + ChatColor.WHITE + dateStr);
+            if (p.getType() != PunishmentType.WARN) {
+                lore.add(ChatColor.GRAY + "Duration: " + ChatColor.YELLOW + durationStr);
+            }
+            lore.add(ChatColor.GRAY + "Status: " + (currentlyActive ? ChatColor.RED + "ACTIVE" : ChatColor.GREEN + "INACTIVE / EXPIRED"));
+
+            inv.setItem(slot++, createItem(icon,
+                    formatTypeColor(p.getType()) + "" + ChatColor.BOLD + p.getType().name() + ChatColor.GRAY + " (" + dateStr + ")",
+                    lore));
+        }
+
+        // Slot 49: Back button to return to /check GUI
+        inv.setItem(49, createItem(Material.ARROW, ChatColor.YELLOW + "" + ChatColor.BOLD + "Back to Check",
+                Collections.singletonList(ChatColor.GRAY + "Click to return to " + targetName + "'s overview")));
+
+        staff.openInventory(inv);
+    }
+
+    private static List<Punishment> getPlayerPunishments(StaffCore plugin, OfflinePlayer target, String targetName) {
+        List<Punishment> matched = new ArrayList<>();
+        for (Punishment p : plugin.getPunishmentManager().getAllPunishments()) {
+            boolean uuidMatch = (target.getUniqueId() != null && p.getTargetUUID() != null && p.getTargetUUID().equals(target.getUniqueId()));
+            boolean nameMatch = (targetName != null && p.getTargetName() != null && p.getTargetName().equalsIgnoreCase(targetName));
+            if (uuidMatch || nameMatch) {
+                matched.add(p);
+            }
+        }
+        // Sort newest first
+        matched.sort((a, b) -> Long.compare(b.getTimestamp(), a.getTimestamp()));
+        return matched;
+    }
+
+    private static ChatColor formatTypeColor(PunishmentType type) {
+        if (type == null) return ChatColor.WHITE;
+        switch (type) {
+            case BAN:
+            case TEMPBAN:
+            case IP_BAN:
+            case TEMP_IP_BAN:
+                return ChatColor.RED;
+            case MUTE:
+            case TEMP_MUTE:
+                return ChatColor.GOLD;
+            case WARN:
+                return ChatColor.YELLOW;
+            default:
+                return ChatColor.WHITE;
+        }
     }
 
     private static ItemStack createGrayPane() {

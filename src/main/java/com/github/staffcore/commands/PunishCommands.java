@@ -139,7 +139,7 @@ public class PunishCommands implements CommandExecutor {
     private boolean handleMute(CommandSender sender, String[] args, boolean temporary) {
         int minArgs = temporary ? 2 : 1;
         if (args.length < minArgs) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /" + (temporary ? "tempmute" : "mute") + " <player|*> " + (temporary ? "<duration> " : "") + "[reason] [-s]"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /" + (temporary ? "tempmute" : "mute") + " <player> " + (temporary ? "<duration> " : "") + "[reason] [-s]"));
             return true;
         }
 
@@ -158,19 +158,6 @@ public class PunishCommands implements CommandExecutor {
 
         ParsedReason parsed = parseSilentAndReason(args, reasonStartIndex);
         PunishmentType type = temporary ? PunishmentType.TEMP_MUTE : PunishmentType.MUTE;
-
-        if (targetInput.equals("*")) {
-            int count = 0;
-            for (Player p : Bukkit.getOnlinePlayers()) {
-                if (sender instanceof Player && p.equals(sender)) continue;
-                if (p.hasPermission("staffcore.bypass.mute") || p.isOp()) continue;
-                plugin.getPunishmentManager().createPunishment(
-                        p.getUniqueId(), p.getName(), "", sender.getName(), type, parsed.reason, duration, parsed.silent);
-                count++;
-            }
-            sender.sendMessage(plugin.getMessageManager().color("&aMuted &e" + count + " &aonline players."));
-            return true;
-        }
 
         String targetName = targetInput;
         UUID targetUUID = null;
@@ -207,27 +194,12 @@ public class PunishCommands implements CommandExecutor {
 
     private boolean handleWarn(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /warn <player|*> [reason] [-s]"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /warn <player> [reason] [-s]"));
             return true;
         }
 
         String targetInput = args[0];
         ParsedReason parsed = parseSilentAndReason(args, 1);
-
-        if (targetInput.equals("*")) {
-            int count = 0;
-            for (Player p : Bukkit.getOnlinePlayers()) {
-                if (sender instanceof Player && p.equals(sender)) continue;
-                if (p.hasPermission("staffcore.bypass.warn") || p.isOp()) continue;
-                String ip = (p.getAddress() != null && p.getAddress().getAddress() != null)
-                        ? p.getAddress().getAddress().getHostAddress() : "";
-                plugin.getPunishmentManager().createPunishment(
-                        p.getUniqueId(), p.getName(), ip, sender.getName(), PunishmentType.WARN, parsed.reason, -1, parsed.silent);
-                count++;
-            }
-            sender.sendMessage(plugin.getMessageManager().color("&aWarned &e" + count + " &aonline players."));
-            return true;
-        }
 
         String targetName = targetInput;
         String targetIp = "";
@@ -310,21 +282,11 @@ public class PunishCommands implements CommandExecutor {
 
     private boolean handleUnmute(CommandSender sender, String[] args) {
         if (args.length < 1) {
-            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unmute <player|*>"));
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /unmute <player>"));
             return true;
         }
 
         String targetInput = args[0];
-        if (targetInput.equals("*")) {
-            int count = 0;
-            for (Player p : Bukkit.getOnlinePlayers()) {
-                if (plugin.getPunishmentManager().unmute(p.getUniqueId())) {
-                    count++;
-                }
-            }
-            sender.sendMessage(plugin.getMessageManager().color("&aUnmuted &e" + count + " &aonline players."));
-            return true;
-        }
 
         @SuppressWarnings("deprecation")
         OfflinePlayer target = Bukkit.getOfflinePlayer(targetInput);

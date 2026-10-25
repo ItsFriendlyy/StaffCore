@@ -159,15 +159,15 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 7. /invsee and /check (Single player only, no wildcard *)
-        if (cmd.equals("invsee") || cmd.equals("check") || cmd.equals("tpall")) {
+        // 7. Single-player only commands (NO wildcard *): /invsee, /check, /tpall, /freeze, /unmute
+        if (cmd.equals("invsee") || cmd.equals("check") || cmd.equals("tpall") || cmd.equals("freeze") || cmd.equals("unmute")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], false);
             }
             return Collections.emptyList();
         }
 
-        // 8. /unban and /pardon tab completion directly from ban list
+        // 8. /unban and /pardon tab completion directly from ban list (NO wildcard *)
         if (cmd.equals("unban") || cmd.equals("pardon")) {
             if (args.length == 1) {
                 return getBannedPlayerCompletions(args[0]);
@@ -175,7 +175,7 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 9. /unbanip tab completion directly from active IP bans
+        // 9. /unbanip tab completion directly from active IP bans (NO wildcard *)
         if (cmd.equals("unbanip") || cmd.equals("unban-ip") || cmd.equals("pardon-ip") || cmd.equals("pardonip")) {
             if (args.length == 1) {
                 return getIpBannedCompletions(args[0]);
@@ -207,9 +207,9 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 12. Utility player commands supporting *: heal, feed, struck, strike, freeze, unmute, fly, invincible, gmc, gms, gma, gmsp, tphere, clear
+        // 12. Utility player commands supporting *: heal, feed, struck, strike, fly, invincible, gmc, gms, gma, gmsp, tphere, clear
         if (cmd.equals("heal") || cmd.equals("feed") || cmd.equals("struck") || cmd.equals("strike") ||
-            cmd.equals("freeze") || cmd.equals("unmute") || cmd.equals("fly") || cmd.equals("invincible") ||
+            cmd.equals("fly") || cmd.equals("invincible") ||
             cmd.equals("gmc") || cmd.equals("gms") || cmd.equals("gma") || cmd.equals("gmsp") || cmd.equals("tphere") ||
             cmd.equals("clear") || cmd.equals("ci") || cmd.equals("clearinventory")) {
             if (args.length == 1) {
@@ -218,45 +218,9 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 13. /mute, /warn (support *)
-        if (cmd.equals("mute") || cmd.equals("warn")) {
-            if (args.length == 1) {
-                return getPlayerNameCompletions(args[0], true);
-            } else if (args.length == 2) {
-                List<String> options = new ArrayList<>(REASONS);
-                options.add("-s");
-                StringUtil.copyPartialMatches(args[1], options, completions);
-                return completions;
-            } else {
-                if (!args[args.length - 2].equalsIgnoreCase("-s")) {
-                    StringUtil.copyPartialMatches(args[args.length - 1], Collections.singletonList("-s"), completions);
-                }
-                return completions;
-            }
-        }
-
-        // 14. /tempmute (supports *)
-        if (cmd.equals("tempmute")) {
-            if (args.length == 1) {
-                return getPlayerNameCompletions(args[0], true);
-            } else if (args.length == 2) {
-                StringUtil.copyPartialMatches(args[1], DURATIONS, completions);
-                return completions;
-            } else if (args.length == 3) {
-                List<String> options = new ArrayList<>(REASONS);
-                options.add("-s");
-                StringUtil.copyPartialMatches(args[2], options, completions);
-                return completions;
-            } else {
-                if (!args[args.length - 2].equalsIgnoreCase("-s")) {
-                    StringUtil.copyPartialMatches(args[args.length - 1], Collections.singletonList("-s"), completions);
-                }
-                return completions;
-            }
-        }
-
-        // 15. /ban, /ipban, /ban-ip, /banip (single target, no *)
-        if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("ban-ip") || cmd.equals("banip")) {
+        // 13. All single-durationless punish commands (NO wildcard *): /ban, /ipban, /ban-ip, /banip, /mute, /warn
+        if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("ban-ip") || cmd.equals("banip") ||
+            cmd.equals("mute") || cmd.equals("warn")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], false);
             } else if (args.length == 2) {
@@ -272,8 +236,9 @@ public class StaffTabCompleter implements TabCompleter {
             }
         }
 
-        // 16. /tempban, /tempipban, /tempban-ip, /tempbanip (single target, no *)
-        if (cmd.equals("tempban") || cmd.equals("tempipban") || cmd.equals("tempban-ip") || cmd.equals("tempbanip")) {
+        // 14. All temporary punish commands (NO wildcard *): /tempban, /tempipban, /tempban-ip, /tempbanip, /tempmute
+        if (cmd.equals("tempban") || cmd.equals("tempipban") || cmd.equals("tempban-ip") || cmd.equals("tempbanip") ||
+            cmd.equals("tempmute")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], false);
             } else if (args.length == 2) {
