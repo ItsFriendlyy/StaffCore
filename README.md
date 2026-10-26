@@ -1,107 +1,99 @@
-<div align="center">
+# 🛡️ StaffCore (v1.2.3)
 
-# 🛡️ StaffCore
-
-**The Ultimate All-in-One Moderation & Staff Utility Suite for Spigot and Paper**
-
-[SpigotMC Resource](https://www.spigotmc.org/resources/staffcore-the-ultimate-moderation-staff-suite-1-8-8-1-20.139680/) • [Releases](https://github.com/ItsFriendlyy/StaffCore/releases) • [Issue Tracker](https://github.com/ItsFriendlyy/StaffCore/issues)
-
-</div>
+**StaffCore** is a lightweight, all-in-one **Minecraft Moderation, Staff Utility, and Server Essentials Suite** built for **Spigot, Paper, and Purpur (`1.8.8` – `26.3`)**. It combines a complete punishment engine, interactive inspection GUIs, staff vanish/freeze tools, and essential player teleportation (`Spawn`, `Warps`, `Homes`) in a single zero-dependency plugin.
 
 ---
 
-## 📖 Overview
+## 🌟 Key Highlights
 
-**StaffCore** is a high-performance Minecraft moderation, administration, and utility plugin built for servers running **Minecraft 1.8.8 through 1.20+**. It replaces bloated multi-plugin setups by combining punishment management, freeze checks, ghost vanish, telemetry inspection, interactive `/invsee`, unsafe enchanting, and network commands into a single, clean build.
-
-### ✨ Key Features
-
-- **Dual-Jar Build System**: 
-  - `StaffCore-Legacy.jar` (`<1.13`): Optimized for 1.8.8–1.12.2 legacy servers.
-  - `StaffCore-Modern.jar` (`1.13–1.20+`): Compiled with native `api-version: '1.20'` to prevent Spigot legacy compatibility lag.
-- **Interactive `/invsee`**: Open and directly edit another player's inventory or armor in real time. Items transferred between inventories stay permanently without disappearing.
-- **Unsafe `/enchant`**: Apply enchantments up to level **32,767** with full tab auto-completion for every enchantment in the game.
-- **Complete Punishment Engine**: Ban, Tempban, IP-Ban, Temp-IP-Ban, Mute, Temp-Mute, and Warn with optional silent (`-s`) execution.
-- **Interactive Freeze System**: Locks player movement and camera interactions while displaying an on-screen title. Dispatches instant alerts if a player disconnects while frozen.
-- **Ghost Vanish**: Hides staff from non-staff, server tab lists, and server list ping counters without forcing spectator mode or giving potion particles.
-- **Inspection GUI (`/check`)**: Comprehensive chest interface displaying playtime, combat stats (Kills, Deaths, K/D), active punishments, and infraction history.
-- **BungeeCord / Velocity Ready**: Transfer players across proxy instances using `/sendserver <player> <server>` and sync data across servers with MySQL.
+* **🔨 Complete Punishment Suite**:
+  * Permanent & temporary **Bans**, **IP-Bans**, **Mutes**, **Warnings** (with configurable auto-ban thresholds), and **Jails**.
+  * Append `-s` to any punishment command for **silent staff-only broadcasts** (`[Silent]`).
+* **🔒 Escape-Proof Jail System**:
+  * Create multiple jails with `/setjail <name>` and jail players permanently (`/jail`) or temporarily (`/tempjail`) with automatic release and return-teleportation.
+  * Jailed players respawn inside jail if they die, stay jailed across relogs, and cannot run commands, throw Ender Pearls/projectiles/potions, eat Chorus Fruit, use portals, or break/place blocks.
+* **🕵️ Interactive `/check` & `/invsee` GUIs**:
+  * **`/check <player>`**: View online/offline status, UUID, right-click IP reveal & alt-account detector, playtime, K/D combat stats, active punishments, and a clickable **54-slot Punishment History GUI** showing every past punishment reason, staff member, date, and duration.
+  * **`/invsee <player>`**: Live two-way 54-slot inventory editor including armor and off-hand synchronization.
+* **👻 Staff Vanish, Freeze & Staff Chat**:
+  * **`/vanish` (`/v`)**: Full invisibility hidden from players, tablist, and server lists, with silent chest inspection.
+  * **`/freeze <player>`**: Locks movement, combat, blocks, and commands with disconnect alerts for staff.
+  * **`/chat <staff|all>`**: Toggleable staff chat channel or quick `#message` prefix.
+* **🏠 Spawn, Warps & Player Homes**:
+  * **`/setspawn` & `/spawn`**: Full spawn management with automatic first-join and non-bed respawn handling.
+  * **`/setwarp`, `/delwarp` & `/warp`**: Server warps with full tab-completion and staff mass-warping (`/warp <name> *`).
+  * **`/sethome`, `/delhome` & `/home`**: Personal player homes with configurable max-home limits and per-player tab-completion.
+* **🛠️ 20+ Staff Utility Commands**:
+  * `/gmc`, `/gms`, `/gmsp`, `/gma`, `/fly`, `/speed <1-10>`, `/invincible`, `/give` (full `1.8.8`–`1.21+` item support including Netherite, Tridents, Maces, Wind Charges & aliases), `/effect`, `/enchant` (up to level 255), `/heal`, `/feed`, `/repair`, `/clear`, `/cleargrounditems`, `/tphere`, `/tpall`, `/struck`, `/sudo`, and `/sendserver`.
+  * Supports the `*` wildcard on utility commands to target all online players at once.
+* **🌐 Network & Storage Ready**:
+  * Supports local YAML (`punishments.yml` & `states.yml`) or **MySQL** synchronization + **BungeeCord/Velocity** `/sendserver` support.
 
 ---
 
-## 🛠️ Commands & Syntax
+## ⚡ Commands & Permissions
 
-### Staff Utilities
-| Command | Usage | Description |
+### 🔨 Moderation & Punishments
+| Command | Permission | Description |
 | :--- | :--- | :--- |
-| `/invsee` | `/invsee <player> [armor]` | Inspect and edit player inventory or armor directly. |
-| `/enchant` | `/enchant <name> <level>` | Apply unsafe enchantments up to level 32,767. |
-| `/speed` | `/speed <1-10> [player]` | Set walk or fly speed (`1` = normal, `10` = max). |
-| `/fly` | `/fly [player]` | Toggle flight mode without switching gamemodes. |
-| `/invincible` | `/invincible [player]` | Toggle immunity against all damage and hunger (`/god`). |
-| `/gmc` / `/gms` | `/gmc [player]` / `/gms [player]` | Switch game mode to Creative or Survival. |
-| `/gmsp` / `/gma` | `/gmsp [player]` / `/gma [player]` | Switch game mode to Spectator or Adventure. |
-| `/tphere` | `/tphere <player>` | Teleport a player to your current location. |
-| `/tpall` | `/tpall [player \| x y z]` | Teleport all players to you or to coordinates. |
-| `/sendserver` | `/sendserver <player> <server>` | Send a player to another BungeeCord/Velocity server. |
+| `/ban <player> [reason] [-s]` | `staffcore.command.ban` | Permanently ban a player |
+| `/tempban <player> <duration> [reason] [-s]` | `staffcore.command.tempban` | Temporarily ban a player |
+| `/ipban <player\|ip> [reason] [-s]` | `staffcore.command.ipban` | Permanently IP-ban a player or IP |
+| `/tempipban <player\|ip> <duration> [reason] [-s]` | `staffcore.command.tempipban` | Temporarily IP-ban a player or IP |
+| `/unban <player>` | `staffcore.command.unban` | Unban a player |
+| `/unbanip <player\|ip>` | `staffcore.command.unbanip` | Unban an IP by player IGN or IP |
+| `/mute <player> [reason] [-s]` | `staffcore.command.mute` | Permanently mute a player |
+| `/tempmute <player> <duration> [reason] [-s]` | `staffcore.command.tempmute` | Temporarily mute a player |
+| `/unmute <player>` | `staffcore.command.unmute` | Unmute a player |
+| `/warn <player> [reason] [-s]` | `staffcore.command.warn` | Warn a player |
+| `/setjail <jail_name>` | `staffcore.command.setjail` | Save a jail location |
+| `/deljail <jail_name>` | `staffcore.command.setjail` | Delete a jail location |
+| `/jail <player> <jail_name> [reason] [-s]` | `staffcore.command.jail` | Permanently jail a player |
+| `/tempjail <player> <jail_name> <duration> [reason] [-s]` | `staffcore.command.tempjail` | Temporarily jail a player |
+| `/unjail <player>` | `staffcore.command.unjail` | Release a jailed player |
 
-### Moderation & Punishments
-| Command | Usage | Description |
+### 🏠 Spawn, Warps & Homes
+| Command | Permission | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `/setspawn` | `staffcore.command.setspawn` | `op` | Set the server spawn location |
+| `/spawn [player\|*]` | `staffcore.command.spawn` | `true` | Teleport to spawn (`staffcore.command.spawn.others` for others) |
+| `/setwarp <warp_name>` | `staffcore.command.setwarp` | `op` | Create or update a server warp |
+| `/delwarp <warp_name>` | `staffcore.command.delwarp` | `op` | Delete a server warp |
+| `/warp [warp_name] [player\|*]` | `staffcore.command.warp` | `true` | Teleport to a warp (`staffcore.command.warp.others` for others) |
+| `/sethome [home_name]` | `staffcore.command.sethome` | `true` | Save a personal home (`staffcore.command.sethome.unlimited` for no limit) |
+| `/delhome <home_name>` | `staffcore.command.delhome` | `true` | Delete a personal home |
+| `/home [home_name]` | `staffcore.command.home` | `true` | Teleport to a personal home |
+
+### 🕵️ Inspection & Staff Tools
+| Command | Permission | Description |
 | :--- | :--- | :--- |
-| `/ban` | `/ban <player> [reason] [-s]` | Permanently ban a player. |
-| `/tempban` | `/tempban <player> <duration> [reason] [-s]` | Temporarily ban a player (e.g. `1d`, `2h`, `30m`). |
-| `/ipban` | `/ipban <player\|ip> [reason] [-s]` | Permanently IP-ban a player or address. |
-| `/tempipban` | `/tempipban <player\|ip> <duration> [reason] [-s]` | Temporarily IP-ban a player or address. |
-| `/unban` | `/unban <player>` | Remove a permanent or temporary ban. |
-| `/unbanip` | `/unbanip <ip>` | Remove an active IP ban. |
-| `/mute` | `/mute <player> [reason] [-s]` | Mute a player permanently in chat. |
-| `/tempmute` | `/tempmute <player> <duration> [reason] [-s]` | Temporarily mute a player in chat. |
-| `/unmute` | `/unmute <player>` | Unmute a muted player. |
-| `/warn` | `/warn <player> [reason] [-s]` | Issue an official warning. |
-| `/freeze` | `/freeze <player>` | Freeze a player for staff inspection. |
-| `/check` | `/check <player>` | Open the telemetry inspection and history GUI. |
-| `/chat` | `/chat <staff\|all>` | Switch between private staff chat and global chat. |
-| `/vanish` | `/vanish` or `/v` | Toggle complete invisibility and tab list hiding. |
-| `/staffcore` | `/staffcore reload` | Reload configuration and punishment data. |
+| `/check <player>` | `staffcore.command.check` | Open player stats & punishment history GUI (`staffcore.check.ip` to reveal IPs) |
+| `/invsee <player>` | `staffcore.command.invsee` | Live 54-slot inventory, armor & off-hand editor |
+| `/freeze <player>` | `staffcore.command.freeze` | Freeze or unfreeze a player |
+| `/vanish` (`/v`) | `staffcore.command.vanish` | Toggle full vanish mode |
+| `/chat <staff\|all>` | `staffcore.command.chat` | Switch between Staff Chat and Global Chat |
+| `/gmc`, `/gms`, `/gmsp`, `/gma` | `staffcore.command.gamemode` | Change game modes (`staffcore.command.gamemode.others` for others) |
+| `/fly [player\|*]` | `staffcore.command.fly` | Toggle persistent flight |
+| `/speed <1-10> [player\|*]` | `staffcore.command.speed` | Set walk or fly speed (1–10) |
+| `/invincible [player\|*]` | `staffcore.command.invincible` | Toggle invincibility & hunger lock |
+| `/give <player\|*> <item> [amount]` | `staffcore.command.give` | Give any 1.8–1.21+ item |
+| `/effect <player\|*> <potion\|clear> [sec] [lvl]` | `staffcore.command.effect` | Apply or clear potion effects up to level 255 |
+| `/enchant <enchantment> [level]` | `staffcore.command.enchant` | Enchant held item up to level 255 |
+| `/heal [player\|*]` | `staffcore.command.heal` | Fully heal player(s) |
+| `/feed [player\|*]` | `staffcore.command.feed` | Fully feed player(s) |
+| `/repair` | `staffcore.command.repair` | Repair held item to full durability |
+| `/clear [player\|*]` | `staffcore.command.clear` | Clear inventory, armor & off-hand |
+| `/cleargrounditems` | `staffcore.command.cleargrounditems` | Remove all dropped items across worlds |
+| `/tphere <player\|*>` | `staffcore.command.teleport` | Teleport player(s) to you |
+| `/tpall [player \| x y z]` | `staffcore.command.teleport` | Teleport all players to you, a player, or coordinates |
+| `/struck [player\|*]` | `staffcore.command.struck` | Strike lightning |
+| `/sudo <player\|*> <cmd \| m:msg>` | `staffcore.command.sudo` | Force command execution or chat |
+| `/sendserver <player\|*> <server>` | `staffcore.command.sendserver` | Send player(s) to a BungeeCord/Velocity server |
+| `/staffcore <reload\|update>` | `staffcore.admin` | Reload config/data or check for updates |
 
 ---
 
-## 🔑 Permissions
-
-| Node | Default | Description |
-| :--- | :--- | :--- |
-| `staffcore.staff` | `op` | General staff permission node. |
-| `staffcore.admin` | `op` | Permission to reload the plugin via `/staffcore reload`. |
-| `staffcore.command.invsee` | `op` | Permission to use `/invsee`. |
-| `staffcore.command.enchant` | `op` | Permission to use `/enchant`. |
-| `staffcore.command.speed` | `op` | Permission to use `/speed`. |
-| `staffcore.command.fly` | `op` | Permission to use `/fly`. |
-| `staffcore.command.invincible` | `op` | Permission to use `/invincible` and `/god`. |
-| `staffcore.command.gamemode` | `op` | Permission to use `/gmc`, `/gms`, `/gmsp`, `/gma`. |
-| `staffcore.command.teleport` | `op` | Permission to use `/tphere` and `/tpall`. |
-| `staffcore.command.sendserver`| `op` | Permission to use `/sendserver`. |
-| `staffcore.command.ban` | `op` | Permission to ban players. |
-| `staffcore.command.tempban` | `op` | Permission to tempban players. |
-| `staffcore.command.mute` | `op` | Permission to mute players. |
-| `staffcore.command.freeze` | `op` | Permission to freeze players. |
-| `staffcore.command.check` | `op` | Permission to open the `/check` telemetry GUI. |
-| `staffcore.command.vanish` | `op` | Permission to toggle vanish. |
-| `staffcore.vanish.see` | `op` | Allows seeing vanished staff members. |
-| `staffcore.broadcast.silent` | `op` | Allows seeing silent (`-s`) punishment broadcasts. |
-| `staffcore.bypass.ban` | `false` | Protects player from bans. |
-| `staffcore.bypass.mute` | `false` | Protects player from mutes. |
-| `staffcore.bypass.freeze` | `false` | Protects player from being frozen. |
-
----
-
-## 🔨 Building from Source
-
-StaffCore uses Maven with automated dual-jar packaging:
-
-```bash
-# Clone repository
-git clone [https://github.com/ItsFriendlyy/StaffCore.git](https://github.com/ItsFriendlyy/StaffCore.git)
-cd StaffCore
-
-# Compile and package both jars
-mvn clean package
+## 📦 Installation
+1. Download the latest `StaffCore-1.2.3.jar` from **Releases**.
+2. Drop it into your server's `/plugins/` directory.
+3. Restart your server and customize `plugins/StaffCore/config.yml` as desired.
