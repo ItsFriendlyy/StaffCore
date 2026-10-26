@@ -51,13 +51,45 @@ public class StaffTabCompleter implements TabCompleter {
             return completions;
         }
 
-        // 2. /vanish, /repair, /cleargrounditems, /setjail
+        // 2. /vanish, /repair, /cleargrounditems, /setjail, /setspawn, /setwarp, /sethome
         if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") || cmd.equals("setjail") ||
+            cmd.equals("setspawn") || cmd.equals("setwarp") || cmd.equals("sethome") ||
             cmd.equals("cleargrounditems") || cmd.equals("cleargrouditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
             return Collections.emptyList();
         }
 
-        // 2b. /deljail <jail_name>
+        // 2a. /spawn [player|*]
+        if (cmd.equals("spawn")) {
+            if (args.length == 1 && (sender.hasPermission("staffcore.command.spawn.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
+                return getPlayerNameCompletions(args[0], true);
+            }
+            return Collections.emptyList();
+        }
+
+        // 2b. /warp <warp_name> [player|*] & /delwarp <warp_name>
+        if (cmd.equals("warp") || cmd.equals("delwarp")) {
+            if (args.length == 1) {
+                StringUtil.copyPartialMatches(args[0].toLowerCase(), UtilityCommands.getWarpNames(), completions);
+                Collections.sort(completions);
+                return completions;
+            } else if (args.length == 2 && cmd.equals("warp") && (sender.hasPermission("staffcore.command.warp.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
+                return getPlayerNameCompletions(args[1], true);
+            }
+            return Collections.emptyList();
+        }
+
+        // 2c. /home <home_name> & /delhome <home_name>
+        if (cmd.equals("home") || cmd.equals("delhome")) {
+            if (args.length == 1 && sender instanceof Player) {
+                Player player = (Player) sender;
+                StringUtil.copyPartialMatches(args[0].toLowerCase(), UtilityCommands.getPlayerHomeNames(player.getUniqueId()), completions);
+                Collections.sort(completions);
+                return completions;
+            }
+            return Collections.emptyList();
+        }
+
+        // 2d. /deljail <jail_name>
         if (cmd.equals("deljail")) {
             if (args.length == 1) {
                 return getJailNameCompletions(args[0]);
@@ -65,7 +97,7 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 2c. /jail <player> <jail_name> [reason] [-s]
+        // 2e. /jail <player> <jail_name> [reason] [-s]
         if (cmd.equals("jail")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], false);
@@ -84,7 +116,7 @@ public class StaffTabCompleter implements TabCompleter {
             }
         }
 
-        // 2d. /tempjail <player> <jail_name> <duration> [reason] [-s]
+        // 2f. /tempjail <player> <jail_name> <duration> [reason] [-s]
         if (cmd.equals("tempjail")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], false);
@@ -140,31 +172,27 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 4. /give <player|*> <item> [amount] (Full modern 1.13-1.21+ & legacy item suggestions)
+        // 4. /give <player|*> <item> [amount] (includes ALL runtime 1.8 - 1.21+ items & Netherite)
         if (cmd.equals("give")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], true);
             } else if (args.length == 2) {
-                String rawQuery = args[1].toLowerCase();
-                if (rawQuery.startsWith("minecraft:")) {
-                    rawQuery = rawQuery.substring("minecraft:".length());
+                String rawQuery = args[1].toLowerCase().replace("minecraft:", "").trim();
+                if (rawQuery.contains("netherrite")) {
+                    rawQuery = rawQuery.replace("netherrite", "netherite");
                 }
-                // Auto-correct common "netherrite" spelling while typing
-                String query = rawQuery.replace("netherrite", "netherite");
-
-                Set<String> allItems = UtilityCommands.getAllGiveableItemNames();
-                List<String> prefixMatches = new ArrayList<>();
+                List<String> allItems = UtilityCommands.getAllGiveableItemNames();
+                List<String> startsWithMatches = new ArrayList<>();
                 List<String> containsMatches = new ArrayList<>();
 
                 for (String item : allItems) {
-                    if (item.startsWith(query)) {
-                        prefixMatches.add(item);
-                    } else if (!query.isEmpty() && item.contains(query)) {
+                    if (item.startsWith(rawQuery)) {
+                        startsWithMatches.add(item);
+                    } else if (!rawQuery.isEmpty() && (item.contains(rawQuery) || item.replace("_", "").contains(rawQuery.replace("_", "")))) {
                         containsMatches.add(item);
                     }
                 }
-
-                completions.addAll(prefixMatches);
+                completions.addAll(startsWithMatches);
                 completions.addAll(containsMatches);
                 return completions;
             } else if (args.length == 3) {

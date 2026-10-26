@@ -41,7 +41,7 @@ public final class StaffCore extends JavaPlugin {
         this.staffChatManager = new StaffChatManager(this);
         this.vanishManager = new VanishManager(this);
 
-        // Load persistent utility states (/fly, /speed, /invincible)
+        // Load persistent utility states (/fly, /speed, /invincible, /spawn, /warps, /homes)
         UtilityCommands.loadStates(this);
 
         // 2. Register BungeeCord Plugin Messaging Channel
@@ -119,13 +119,15 @@ public final class StaffCore extends JavaPlugin {
             }
         }
 
-        // Staff Utilities
+        // Staff Utilities & Teleportation (Spawn, Warps, Homes)
         this.utilExecutor = new UtilityCommands(this);
         String[] utilCmds = {
             "gmc", "gms", "gmsp", "gma", "fly", "speed", "invincible",
             "tphere", "tpall", "invsee", "enchant", "sendserver",
             "heal", "feed", "repair", "struck", "sudo",
-            "give", "effect", "cleargrounditems", "clear"
+            "give", "effect", "cleargrounditems", "clear",
+            "setspawn", "spawn", "setwarp", "delwarp", "warp",
+            "sethome", "delhome", "home"
         };
         for (String cmdName : utilCmds) {
             PluginCommand cmd = getCommand(cmdName);

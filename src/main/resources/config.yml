@@ -94,6 +94,19 @@ messages:
   repair-success: "&aSuccessfully repaired held item to full durability."
   struck-success: "&aStruck lightning at &e%target%&a!"
   sudo-success: "&aForced &e%target% &ato execute: &f%command%"
+  setspawn-success: "&aSuccessfully set the server spawn at your current location!"
+  spawn-teleported: "&aTeleported to &espawn&a."
+  spawn-not-set: "&cThe server spawn has not been set yet! Use &e/setspawn&c."
+  setwarp-success: "&aSuccessfully set warp &e%warp% &aat your current location."
+  delwarp-success: "&aSuccessfully deleted warp &e%warp%&a."
+  warp-teleported: "&aTeleported to warp &e%warp%&a."
+  warp-not-found: "&cWarp &e%warp% &cwas not found!"
+  sethome-success: "&aSuccessfully set home &e%home% &aat your current location."
+  delhome-success: "&aSuccessfully deleted home &e%home%&a."
+  home-teleported: "&aTeleported to home &e%home%&a."
+  home-not-found: "&cHome &e%home% &cwas not found!"
+  no-homes-set: "&cYou do not have any homes set! Use &e/sethome <name> &cfirst."
+  home-limit-reached: "&cYou have reached the maximum limit of &e%max% &chomes!"
 
 # Screen messages shown to kicked / banned players
 screens:
@@ -226,4 +239,7 @@ broadcasts:
     tempmute: "&8[&cSilent&8] &7%staff% temp-muted &e%target% &7for &e%duration% &7for: &f%reason%"
     jail: "&8[&cSilent&8] &7%staff% permanently jailed &e%target% &7for: &f%reason%"
     tempjail: "&8[&cSilent&8] &7%staff% temp-jailed &e%target% &7for &e%duration% &7for: &f%reason%"
-    warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%"
+    warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%" homes:
+homes:
+  # Maximum number of homes a regular player can set (0 = unlimited, bypassed by staffcore.command.sethome.unlimited)
+  max-homes: 5

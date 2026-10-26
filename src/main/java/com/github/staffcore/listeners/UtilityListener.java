@@ -57,6 +57,16 @@ public class UtilityListener implements Listener {
                     }
                 }, 2L);
             }
+        } else if (!player.hasPlayedBefore()) {
+            // Teleport first-time players to custom /setspawn if configured
+            Location spawnLoc = UtilityCommands.getSpawnLocation();
+            if (spawnLoc != null) {
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (player.isOnline()) {
+                        player.teleport(spawnLoc);
+                    }
+                }, 2L);
+            }
         }
 
         applySavedStates(player);
@@ -89,7 +99,7 @@ public class UtilityListener implements Listener {
     }
 
     /**
-     * Respawn jailed players back inside jail when they die.
+     * Respawn jailed players back inside jail when they die, or at custom /setspawn if they have no bed/anchor.
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerRespawn(PlayerRespawnEvent event) {
@@ -104,6 +114,14 @@ public class UtilityListener implements Listener {
                         player.teleport(jailLoc);
                     }
                 }, 1L);
+            }
+            return;
+        }
+
+        if (!event.isBedSpawn()) {
+            Location spawnLoc = UtilityCommands.getSpawnLocation();
+            if (spawnLoc != null) {
+                event.setRespawnLocation(spawnLoc);
             }
         }
     }

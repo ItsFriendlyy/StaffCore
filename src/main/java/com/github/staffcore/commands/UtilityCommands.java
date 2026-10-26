@@ -38,10 +38,15 @@ public class UtilityCommands implements CommandExecutor {
     public static final Map<UUID, Float> walkSpeeds = new HashMap<>();
     public static final Map<UUID, Float> flySpeeds = new HashMap<>();
 
+    // Spawn, Warps, and Homes storage (persisted in states.yml)
+    public static Location spawnLocation = null;
+    public static final Map<String, Location> warps = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    public static final Map<UUID, Map<String, Location>> playerHomes = new HashMap<>();
+
+    private static List<String> cachedGiveableItemNames = null;
+
     public static final String INVSEE_PREFIX = ChatColor.DARK_GRAY + "Invsee: " + ChatColor.DARK_RED;
     public static final String ARMOR_PREFIX = ChatColor.DARK_GRAY + "Armor: " + ChatColor.DARK_RED;
-
-    private static Set<String> cachedGiveableItemNames = null;
 
     public UtilityCommands(StaffCore plugin) {
         this.plugin = plugin;
@@ -71,6 +76,21 @@ public class UtilityCommands implements CommandExecutor {
         }
     }
 
+    public static Set<String> getWarpNames() {
+        return Collections.unmodifiableSet(warps.keySet());
+    }
+
+    public static Set<String> getPlayerHomeNames(UUID uuid) {
+        if (uuid == null) return Collections.emptySet();
+        Map<String, Location> homes = playerHomes.get(uuid);
+        if (homes == null) return Collections.emptySet();
+        return Collections.unmodifiableSet(homes.keySet());
+    }
+
+    public static Location getSpawnLocation() {
+        return spawnLocation != null ? spawnLocation.clone() : null;
+    }
+
     public static void loadStates(StaffCore plugin) {
         if (plugin == null) return;
         File file = new File(plugin.getDataFolder(), "states.yml");
@@ -81,6 +101,9 @@ public class UtilityCommands implements CommandExecutor {
         flyPlayers.clear();
         walkSpeeds.clear();
         flySpeeds.clear();
+        spawnLocation = null;
+        warps.clear();
+        playerHomes.clear();
 
         for (String s : data.getStringList("invincible")) {
             try {
@@ -115,6 +138,46 @@ public class UtilityCommands implements CommandExecutor {
                 } catch (Exception ignored) {}
             }
         }
+
+        // Load Spawn
+        ConfigurationSection spawnSec = data.getConfigurationSection("spawn");
+        if (spawnSec != null) {
+            spawnLocation = deserializeLocation(spawnSec);
+        }
+
+        // Load Warps
+        ConfigurationSection warpSec = data.getConfigurationSection("warps");
+        if (warpSec != null) {
+            for (String warpName : warpSec.getKeys(false)) {
+                Location loc = deserializeLocation(warpSec.getConfigurationSection(warpName));
+                if (loc != null) {
+                    warps.put(warpName.toLowerCase(), loc);
+                }
+            }
+        }
+
+        // Load Homes
+        ConfigurationSection homesSec = data.getConfigurationSection("homes");
+        if (homesSec != null) {
+            for (String uuidStr : homesSec.getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(uuidStr);
+                    ConfigurationSection userHomesSec = homesSec.getConfigurationSection(uuidStr);
+                    if (userHomesSec != null) {
+                        Map<String, Location> map = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+                        for (String homeName : userHomesSec.getKeys(false)) {
+                            Location loc = deserializeLocation(userHomesSec.getConfigurationSection(homeName));
+                            if (loc != null) {
+                                map.put(homeName.toLowerCase(), loc);
+                            }
+                        }
+                        if (!map.isEmpty()) {
+                            playerHomes.put(uuid, map);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     public static void saveStates(StaffCore plugin) {
@@ -145,11 +208,53 @@ public class UtilityCommands implements CommandExecutor {
             data.set("fly-speed." + entry.getKey().toString(), entry.getValue());
         }
 
+        // Save Spawn
+        if (spawnLocation != null) {
+            serializeLocation(data, "spawn", spawnLocation);
+        }
+
+        // Save Warps
+        for (Map.Entry<String, Location> entry : warps.entrySet()) {
+            serializeLocation(data, "warps." + entry.getKey().toLowerCase(), entry.getValue());
+        }
+
+        // Save Homes
+        for (Map.Entry<UUID, Map<String, Location>> userEntry : playerHomes.entrySet()) {
+            String base = "homes." + userEntry.getKey().toString();
+            for (Map.Entry<String, Location> homeEntry : userEntry.getValue().entrySet()) {
+                serializeLocation(data, base + "." + homeEntry.getKey().toLowerCase(), homeEntry.getValue());
+            }
+        }
+
         try {
             data.save(file);
         } catch (IOException e) {
             plugin.getLogger().warning("Could not save states.yml: " + e.getMessage());
         }
+    }
+
+    private static void serializeLocation(FileConfiguration data, String path, Location loc) {
+        if (loc == null || loc.getWorld() == null) return;
+        data.set(path + ".world", loc.getWorld().getName());
+        data.set(path + ".x", loc.getX());
+        data.set(path + ".y", loc.getY());
+        data.set(path + ".z", loc.getZ());
+        data.set(path + ".yaw", (double) loc.getYaw());
+        data.set(path + ".pitch", (double) loc.getPitch());
+    }
+
+    private static Location deserializeLocation(ConfigurationSection sec) {
+        if (sec == null) return null;
+        String worldName = sec.getString("world");
+        if (worldName == null) return null;
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) return null;
+        double x = sec.getDouble("x");
+        double y = sec.getDouble("y");
+        double z = sec.getDouble("z");
+        float yaw = (float) sec.getDouble("yaw");
+        float pitch = (float) sec.getDouble("pitch");
+        return new Location(world, x, y, z, yaw, pitch);
     }
 
     public static ItemStack createGrayPane() {
@@ -247,8 +352,10 @@ public class UtilityCommands implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String cmd = command.getName().toLowerCase();
 
-        if (!(sender instanceof Player) && (cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair") || cmd.equals("clear"))) {
-            if (args.length == 0 || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair")) {
+        if (!(sender instanceof Player) && (cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair") || cmd.equals("clear")
+                || cmd.equals("setspawn") || cmd.equals("setwarp") || cmd.equals("sethome") || cmd.equals("delhome") || cmd.equals("home"))) {
+            if (args.length == 0 || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair")
+                    || cmd.equals("setspawn") || cmd.equals("setwarp") || cmd.equals("sethome") || cmd.equals("delhome") || cmd.equals("home")) {
                 sender.sendMessage(ChatColor.RED + "This command can only be executed by a player in-game!");
                 return true;
             }
@@ -303,10 +410,285 @@ public class UtilityCommands implements CommandExecutor {
             case "ci":
             case "clearinventory":
                 return handleClear(sender, args);
+            case "setspawn":
+                return handleSetSpawn((Player) sender);
+            case "spawn":
+                return handleSpawn(sender, args);
+            case "setwarp":
+                return handleSetWarp((Player) sender, args);
+            case "delwarp":
+                return handleDelWarp(sender, args);
+            case "warp":
+                return handleWarp(sender, args);
+            case "sethome":
+                return handleSetHome((Player) sender, args);
+            case "delhome":
+                return handleDelHome((Player) sender, args);
+            case "home":
+                return handleHome((Player) sender, args);
             default:
                 return false;
         }
     }
+
+    // =========================================================================
+    //                     SPAWN, WARP & HOME COMMAND HANDLERS
+    // =========================================================================
+
+    private boolean handleSetSpawn(Player player) {
+        Location loc = player.getLocation().clone();
+        spawnLocation = loc;
+        if (loc.getWorld() != null) {
+            try {
+                loc.getWorld().setSpawnLocation(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+            } catch (Throwable ignored) {}
+        }
+        saveStates(plugin);
+        player.sendMessage(plugin.getMessageManager().color(
+                plugin.getConfig().getString("messages.setspawn-success", "&aSuccessfully set the server spawn at your current location!")));
+        return true;
+    }
+
+    private boolean handleSpawn(CommandSender sender, String[] args) {
+        Location dest = getSpawnLocation();
+        if (dest == null) {
+            if (sender instanceof Player && ((Player) sender).getWorld() != null) {
+                dest = ((Player) sender).getWorld().getSpawnLocation();
+            } else if (!Bukkit.getWorlds().isEmpty()) {
+                dest = Bukkit.getWorlds().get(0).getSpawnLocation();
+            }
+        }
+        if (dest == null) {
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.spawn-not-set", "&cThe server spawn has not been set yet! Use &e/setspawn&c.")));
+            return true;
+        }
+
+        // Optional: /spawn <player|*> for staff
+        if (args.length > 0 && (sender.hasPermission("staffcore.command.spawn.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
+            if (args[0].equals("*")) {
+                int count = 0;
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    p.teleport(dest);
+                    if (!p.equals(sender)) {
+                        p.sendMessage(plugin.getMessageManager().color(
+                                plugin.getConfig().getString("messages.spawn-teleported", "&aTeleported to &espawn&a.")));
+                    }
+                    count++;
+                }
+                sender.sendMessage(plugin.getMessageManager().color("&aTeleported &e" + count + " &aonline players to &espawn&a."));
+                return true;
+            }
+            Player target = Bukkit.getPlayer(args[0]);
+            if (target == null) {
+                sender.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found!")
+                                .replace("%target%", args[0])));
+                return true;
+            }
+            target.teleport(dest);
+            sender.sendMessage(plugin.getMessageManager().color("&aTeleported &e" + target.getName() + " &ato &espawn&a."));
+            if (!target.equals(sender)) {
+                target.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.spawn-teleported", "&aTeleported to &espawn&a.")));
+            }
+            return true;
+        }
+
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Usage from console: /spawn <player|*>");
+            return true;
+        }
+
+        Player player = (Player) sender;
+        player.teleport(dest);
+        player.sendMessage(plugin.getMessageManager().color(
+                plugin.getConfig().getString("messages.spawn-teleported", "&aTeleported to &espawn&a.")));
+        return true;
+    }
+
+    private boolean handleSetWarp(Player player, String[] args) {
+        if (args.length < 1) {
+            player.sendMessage(plugin.getMessageManager().color("&cUsage: /setwarp <warp_name>"));
+            return true;
+        }
+        String warpName = args[0].toLowerCase();
+        warps.put(warpName, player.getLocation().clone());
+        saveStates(plugin);
+        player.sendMessage(plugin.getMessageManager().color(
+                plugin.getConfig().getString("messages.setwarp-success", "&aSuccessfully set warp &e%warp% &aat your current location.")
+                        .replace("%warp%", warpName)));
+        return true;
+    }
+
+    private boolean handleDelWarp(CommandSender sender, String[] args) {
+        if (args.length < 1) {
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /delwarp <warp_name>"));
+            return true;
+        }
+        String warpName = args[0].toLowerCase();
+        if (warps.remove(warpName) != null) {
+            saveStates(plugin);
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.delwarp-success", "&aSuccessfully deleted warp &e%warp%&a.")
+                            .replace("%warp%", warpName)));
+        } else {
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.warp-not-found", "&cWarp &e%warp% &cwas not found!")
+                            .replace("%warp%", warpName)));
+        }
+        return true;
+    }
+
+    private boolean handleWarp(CommandSender sender, String[] args) {
+        if (args.length < 1) {
+            if (warps.isEmpty()) {
+                sender.sendMessage(plugin.getMessageManager().color("&cNo warps have been set yet! Usage: /warp <warp_name>"));
+            } else {
+                sender.sendMessage(plugin.getMessageManager().color(
+                        "&aAvailable warps (&e" + warps.size() + "&a): &f" + String.join("&7, &f", warps.keySet())));
+            }
+            return true;
+        }
+
+        String warpName = args[0].toLowerCase();
+        Location loc = warps.get(warpName);
+        if (loc == null || loc.getWorld() == null) {
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.warp-not-found", "&cWarp &e%warp% &cwas not found!")
+                            .replace("%warp%", warpName)));
+            return true;
+        }
+
+        // Optional: /warp <warp_name> <player|*> for staff
+        if (args.length >= 2 && (sender.hasPermission("staffcore.command.warp.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
+            if (args[1].equals("*")) {
+                int count = 0;
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    p.teleport(loc);
+                    if (!p.equals(sender)) {
+                        p.sendMessage(plugin.getMessageManager().color(
+                                plugin.getConfig().getString("messages.warp-teleported", "&aTeleported to warp &e%warp%&a.")
+                                        .replace("%warp%", warpName)));
+                    }
+                    count++;
+                }
+                sender.sendMessage(plugin.getMessageManager().color("&aTeleported &e" + count + " &aonline players to warp &e" + warpName + "&a."));
+                return true;
+            }
+            Player target = Bukkit.getPlayer(args[1]);
+            if (target == null) {
+                sender.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found!")
+                                .replace("%target%", args[1])));
+                return true;
+            }
+            target.teleport(loc);
+            sender.sendMessage(plugin.getMessageManager().color("&aTeleported &e" + target.getName() + " &ato warp &e" + warpName + "&a."));
+            if (!target.equals(sender)) {
+                target.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.warp-teleported", "&aTeleported to warp &e%warp%&a.")
+                                .replace("%warp%", warpName)));
+            }
+            return true;
+        }
+
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Usage from console: /warp <warp_name> <player|*>");
+            return true;
+        }
+
+        Player player = (Player) sender;
+        player.teleport(loc);
+        player.sendMessage(plugin.getMessageManager().color(
+                plugin.getConfig().getString("messages.warp-teleported", "&aTeleported to warp &e%warp%&a.")
+                        .replace("%warp%", warpName)));
+        return true;
+    }
+
+    private boolean handleSetHome(Player player, String[] args) {
+        String homeName = args.length >= 1 ? args[0].toLowerCase() : "home";
+        UUID uuid = player.getUniqueId();
+        Map<String, Location> homes = playerHomes.computeIfAbsent(uuid, k -> new TreeMap<>(String.CASE_INSENSITIVE_ORDER));
+
+        int maxHomes = plugin.getConfig().getInt("homes.max-homes", 5);
+        if (maxHomes > 0 && !homes.containsKey(homeName) && homes.size() >= maxHomes
+                && !player.hasPermission("staffcore.command.sethome.unlimited") && !player.isOp()) {
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.home-limit-reached", "&cYou have reached the maximum limit of &e%max% &chomes!")
+                            .replace("%max%", String.valueOf(maxHomes))));
+            return true;
+        }
+
+        homes.put(homeName, player.getLocation().clone());
+        saveStates(plugin);
+        player.sendMessage(plugin.getMessageManager().color(
+                plugin.getConfig().getString("messages.sethome-success", "&aSuccessfully set home &e%home% &aat your current location.")
+                        .replace("%home%", homeName)));
+        return true;
+    }
+
+    private boolean handleDelHome(Player player, String[] args) {
+        if (args.length < 1) {
+            player.sendMessage(plugin.getMessageManager().color("&cUsage: /delhome <home_name>"));
+            return true;
+        }
+        String homeName = args[0].toLowerCase();
+        Map<String, Location> homes = playerHomes.get(player.getUniqueId());
+        if (homes != null && homes.remove(homeName) != null) {
+            saveStates(plugin);
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.delhome-success", "&aSuccessfully deleted home &e%home%&a.")
+                            .replace("%home%", homeName)));
+        } else {
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.home-not-found", "&cHome &e%home% &cwas not found!")
+                            .replace("%home%", homeName)));
+        }
+        return true;
+    }
+
+    private boolean handleHome(Player player, String[] args) {
+        Map<String, Location> homes = playerHomes.get(player.getUniqueId());
+        if (homes == null || homes.isEmpty()) {
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.no-homes-set", "&cYou do not have any homes set! Use &e/sethome <name> &cfirst.")));
+            return true;
+        }
+
+        String homeName;
+        if (args.length < 1) {
+            if (homes.containsKey("home")) {
+                homeName = "home";
+            } else if (homes.size() == 1) {
+                homeName = homes.keySet().iterator().next();
+            } else {
+                player.sendMessage(plugin.getMessageManager().color(
+                        "&aYour homes (&e" + homes.size() + "&a): &f" + String.join("&7, &f", homes.keySet()) + " &7(Use &e/home <name>&7)"));
+                return true;
+            }
+        } else {
+            homeName = args[0].toLowerCase();
+        }
+
+        Location loc = homes.get(homeName);
+        if (loc == null || loc.getWorld() == null) {
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.home-not-found", "&cHome &e%home% &cwas not found! Available homes: &f" + String.join(", ", homes.keySet()))
+                            .replace("%home%", homeName)));
+            return true;
+        }
+
+        player.teleport(loc);
+        player.sendMessage(plugin.getMessageManager().color(
+                plugin.getConfig().getString("messages.home-teleported", "&aTeleported to home &e%home%&a.")
+                        .replace("%home%", homeName)));
+        return true;
+    }
+
+    // =========================================================================
+    //                        STAFF UTILITY HANDLERS
+    // =========================================================================
 
     private boolean handleGamemode(CommandSender sender, String[] args, GameMode mode, String modeName) {
         if (args.length > 0) {
@@ -951,7 +1333,7 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         Material mat = matchEasyMaterial(args[1]);
-        if (mat == null || getRawEnumName(mat).equals("AIR")) {
+        if (mat == null || mat == Material.AIR) {
             sender.sendMessage(ChatColor.RED + "Item '" + args[1] + "' not found! Press TAB to autocomplete item names.");
             return true;
         }
@@ -968,7 +1350,8 @@ public class UtilityCommands implements CommandExecutor {
             }
         }
 
-        String itemName = getRawEnumName(mat).toLowerCase().replace("legacy_", "").replace("_", " ");
+        String rawName = ((Enum<?>) mat).name();
+        String itemName = rawName.toLowerCase().replace("legacy_", "").replace("_", " ");
 
         if (args[0].equals("*")) {
             int count = 0;
@@ -1004,23 +1387,14 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     /**
-     * Reads the true enum name via java.lang.Enum#name so Spigot's Commodore bytecode remapper
-     * cannot intercept Material#name.
-     */
-    public static String getRawEnumName(Material m) {
-        if (m == null) return "";
-        return ((Enum<?>) m).name();
-    }
-
-    /**
-     * Bypasses Spigot's Commodore bytecode filter by loading org.bukkit.Material dynamically
-     * via Class.forName and returning all runtime enum constants.
+     * Resolves ALL materials across 1.8.8 - 1.21+, including Netherite items, Tridents, Maces, etc.,
+     * bypassing Spigot's legacy Commodore bytecode filter via dynamic Class.forName reflection.
      */
     public static Material[] getAllRuntimeMaterials() {
         try {
             Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
             Object[] constants = matClass.getEnumConstants();
-            if (constants instanceof Material[] && constants.length > 0) {
+            if (constants != null && constants.length > 0) {
                 return (Material[]) constants;
             }
         } catch (Throwable ignored) {}
@@ -1028,14 +1402,13 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     /**
-     * Builds and caches the complete set of giveable item names on the server (1.8.8 - 1.21+).
+     * Returns a cached, sorted list of all giveable item names across 1.8.8 - 1.21+ for fast /give tab completion.
      */
-    public static Set<String> getAllGiveableItemNames() {
+    public static List<String> getAllGiveableItemNames() {
         if (cachedGiveableItemNames != null && !cachedGiveableItemNames.isEmpty()) {
             return cachedGiveableItemNames;
         }
-
-        Set<String> items = new TreeSet<>();
+        Set<String> names = new TreeSet<>();
         Method isItemMethod = null;
         try {
             Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
@@ -1044,31 +1417,27 @@ public class UtilityCommands implements CommandExecutor {
 
         for (Material m : getAllRuntimeMaterials()) {
             if (m == null) continue;
-            String rawName = getRawEnumName(m);
-            if (rawName.startsWith("LEGACY_") || rawName.equals("AIR") || rawName.endsWith("_AIR")) {
+            String rawName = ((Enum<?>) m).name();
+            if (rawName.equals("AIR") || rawName.endsWith("_AIR") || rawName.startsWith("LEGACY_")) {
                 continue;
             }
             if (isItemMethod != null) {
                 try {
-                    Boolean giveable = (Boolean) isItemMethod.invoke(m);
-                    if (giveable != null && !giveable) {
+                    Boolean isItem = (Boolean) isItemMethod.invoke(m);
+                    if (isItem != null && !isItem) {
                         continue;
                     }
                 } catch (Throwable ignored) {}
             }
-            items.add(rawName.toLowerCase());
+            names.add(rawName.toLowerCase());
         }
 
-        // Ensure common shorthand aliases are also suggested
-        items.addAll(Arrays.asList(
-            "netherite_sword", "netherite_pickaxe", "netherite_axe", "netherite_shovel", "netherite_hoe",
-            "netherite_helmet", "netherite_chestplate", "netherite_leggings", "netherite_boots",
-            "netherite_ingot", "netherite_scrap", "netherite_block", "netherite_upgrade_smithing_template",
-            "ancient_debris", "trident", "crossbow", "elytra", "shulker_box", "mace", "wind_charge", "heavy_core",
-            "golden_apple", "enchanted_golden_apple", "totem_of_undying", "ender_pearl", "experience_bottle", "command_block", "steak"
+        // Useful shorthand aliases
+        names.addAll(Arrays.asList(
+                "gapple", "egap", "notch_apple", "totem", "pearl", "xpbottle", "cmdblock", "steak"
         ));
 
-        cachedGiveableItemNames = Collections.unmodifiableSet(items);
+        cachedGiveableItemNames = new ArrayList<>(names);
         return cachedGiveableItemNames;
     }
 
@@ -1079,17 +1448,7 @@ public class UtilityCommands implements CommandExecutor {
             clean = clean.replace("NETHERRITE", "NETHERITE");
         }
 
-        // 1. Scan actual runtime enum constants first using Enum#name (bypasses Commodore legacy filter)
-        Material[] allMaterials = getAllRuntimeMaterials();
-        for (Material m : allMaterials) {
-            String rawName = getRawEnumName(m);
-            if (rawName.startsWith("LEGACY_")) continue;
-            if (rawName.equalsIgnoreCase(clean)) {
-                return m;
-            }
-        }
-
-        // 2. Try Spigot 1.13+ non-legacy matchMaterial(name, false) via reflection
+        // 1. Try Spigot 1.13+ non-legacy matchMaterial(name, false) via dynamic reflection
         try {
             Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
             Method matchModern = matClass.getMethod("matchMaterial", String.class, boolean.class);
@@ -1097,7 +1456,25 @@ public class UtilityCommands implements CommandExecutor {
             if (m != null) return m;
         } catch (Throwable ignored) {}
 
-        // 3. Common shorthand aliases (including Netherite shorthands)
+        // 2. Try Spigot 1.13+ getMaterial(name, false) via dynamic reflection
+        try {
+            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
+            Method getModern = matClass.getMethod("getMaterial", String.class, boolean.class);
+            Material m = (Material) getModern.invoke(null, clean, false);
+            if (m != null) return m;
+        } catch (Throwable ignored) {}
+
+        // 3. Scan actual runtime enum constants directly using ((Enum<?>) m).name() (bypasses Commodore)
+        Material[] allMaterials = getAllRuntimeMaterials();
+        for (Material m : allMaterials) {
+            String rawName = ((Enum<?>) m).name();
+            if (rawName.startsWith("LEGACY_")) continue;
+            if (rawName.equalsIgnoreCase(clean)) {
+                return m;
+            }
+        }
+
+        // 4. Shorthand aliases
         String compact = clean.toLowerCase().replace("_", "");
         switch (compact) {
             case "gap":
@@ -1157,36 +1534,42 @@ public class UtilityCommands implements CommandExecutor {
                 break;
         }
 
-        // 4. Fuzzy match against all non-legacy runtime enum constants
+        // 5. Direct matchMaterial / valueOf fallback
+        Material direct = Material.matchMaterial(clean);
+        if (direct != null) return direct;
+
+        try {
+            return Material.valueOf(clean);
+        } catch (IllegalArgumentException ignored) {}
+
+        // 6. Fuzzy match against all non-legacy runtime enum constants
         for (Material m : allMaterials) {
-            String rawName = getRawEnumName(m);
+            String rawName = ((Enum<?>) m).name();
             if (rawName.startsWith("LEGACY_")) continue;
             if (rawName.replace("_", "").equalsIgnoreCase(compact)) {
                 return m;
             }
         }
         for (Material m : allMaterials) {
-            String rawName = getRawEnumName(m);
+            String rawName = ((Enum<?>) m).name();
             if (rawName.startsWith("LEGACY_")) continue;
             if (rawName.toLowerCase().startsWith(clean.toLowerCase())) {
                 return m;
             }
         }
-
-        // 5. Fallback to legacy matchMaterial
-        return Material.matchMaterial(clean);
+        return null;
     }
 
     private static Material findRuntimeMaterial(String primary, String fallback) {
         for (Material m : getAllRuntimeMaterials()) {
-            String rawName = getRawEnumName(m);
+            String rawName = ((Enum<?>) m).name();
             if (primary != null && rawName.equalsIgnoreCase(primary)) {
                 return m;
             }
         }
         if (fallback != null) {
             for (Material m : getAllRuntimeMaterials()) {
-                String rawName = getRawEnumName(m);
+                String rawName = ((Enum<?>) m).name();
                 if (rawName.equalsIgnoreCase(fallback)) {
                     return m;
                 }

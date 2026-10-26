@@ -4,22 +4,22 @@
     <echo message="====================================================" />
     <echo message="Building Clean StaffCore Legacy &amp; Modern Jars..." />
     <echo message="====================================================" />
-    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.2-Legacy.jar">
-      <zipfileset src="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.2.jar">
+    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.3-Legacy.jar">
+      <zipfileset src="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.3.jar">
         <exclude name="plugin*.yml" />
       </zipfileset>
       <zipfileset file="/workspaces/Friendly-s-Management-/src/main/resources/plugin.yml" fullpath="plugin.yml" />
     </jar>
-    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.2-Modern.jar">
-      <zipfileset src="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.2.jar">
+    <jar destfile="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.3-Modern.jar">
+      <zipfileset src="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.3.jar">
         <exclude name="plugin*.yml" />
       </zipfileset>
       <zipfileset file="/workspaces/Friendly-s-Management-/src/main/resources/plugin-modern.yml" fullpath="plugin.yml" />
     </jar>
-    <delete file="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.2.jar" quiet="true" />
-    <delete file="/workspaces/Friendly-s-Management-/target/original-StaffCore-1.2.2.jar" quiet="true" />
+    <delete file="/workspaces/Friendly-s-Management-/target/StaffCore-1.2.3.jar" quiet="true" />
+    <delete file="/workspaces/Friendly-s-Management-/target/original-StaffCore-1.2.3.jar" quiet="true" />
     <echo message="SUCCESS! Generated ONLY 2 jars in target:" />
-    <echo message="[+] target/StaffCore-1.2.2-Legacy.jar (For 1.8.8 - 1.12.2)" />
-    <echo message="[+] target/StaffCore-1.2.2-Modern.jar (For 1.13 - 1.20+)" />
+    <echo message="[+] target/StaffCore-1.2.3-Legacy.jar (For 1.8.8 - 1.12.2)" />
+    <echo message="[+] target/StaffCore-1.2.3-Modern.jar (For 1.13 - 1.20+)" />
   </target>
 </project>

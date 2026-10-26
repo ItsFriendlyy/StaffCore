@@ -1,9 +1,9 @@
 name: StaffCore
-version: 1.2.2
+version: 1.2.3
 main: com.github.staffcore.StaffCore
 api-version: 1.20
 author: StaffCoreDev
-description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, Jail, BungeeCord, and Utilities.
+description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, Jail, Spawn, Warps, Homes, BungeeCord, and Utilities.
 
 commands:
   ban:
@@ -91,6 +91,40 @@ commands:
     description: Reloads plugin configuration or checks for updates.
     usage: /staffcore <reload|update>
     permission: staffcore.admin
+
+  # Spawn, Warps & Homes
+  setspawn:
+    description: Sets the server spawn point at your current location.
+    usage: /setspawn
+    permission: staffcore.command.setspawn
+  spawn:
+    description: Teleports you to the server spawn point.
+    usage: /spawn [player|*]
+    permission: staffcore.command.spawn
+  setwarp:
+    description: Creates or updates a server warp at your current location.
+    usage: /setwarp <warp_name>
+    permission: staffcore.command.setwarp
+  delwarp:
+    description: Deletes an existing server warp.
+    usage: /delwarp <warp_name>
+    permission: staffcore.command.delwarp
+  warp:
+    description: Teleports you to a server warp.
+    usage: /warp <warp_name> [player|*]
+    permission: staffcore.command.warp
+  sethome:
+    description: Sets a personal home at your current location.
+    usage: /sethome [home_name]
+    permission: staffcore.command.sethome
+  delhome:
+    description: Deletes one of your personal homes.
+    usage: /delhome <home_name>
+    permission: staffcore.command.delhome
+  home:
+    description: Teleports you to one of your personal homes.
+    usage: /home [home_name]
+    permission: staffcore.command.home
 
   # Staff Utility Suite
   gmc:
@@ -236,6 +270,39 @@ permissions:
   staffcore.command.vanish:
     description: Allows toggling vanish.
     default: op
+  staffcore.command.setspawn:
+    description: Allows setting the server spawn location.
+    default: op
+  staffcore.command.spawn:
+    description: Allows teleporting to the server spawn.
+    default: true
+  staffcore.command.spawn.others:
+    description: Allows teleporting other players to spawn.
+    default: op
+  staffcore.command.setwarp:
+    description: Allows creating server warps.
+    default: op
+  staffcore.command.delwarp:
+    description: Allows deleting server warps.
+    default: op
+  staffcore.command.warp:
+    description: Allows teleporting to server warps.
+    default: true
+  staffcore.command.warp.others:
+    description: Allows warping other players.
+    default: op
+  staffcore.command.sethome:
+    description: Allows setting personal homes.
+    default: true
+  staffcore.command.sethome.unlimited:
+    description: Allows setting an unlimited number of homes.
+    default: op
+  staffcore.command.delhome:
+    description: Allows deleting personal homes.
+    default: true
+  staffcore.command.home:
+    description: Allows teleporting to personal homes.
+    default: true
   staffcore.command.gamemode:
     description: Allows changing game modes (/gmc, /gms, /gmsp, /gma).
     default: op
