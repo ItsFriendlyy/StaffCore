@@ -2,18 +2,23 @@ package com.github.staffcore.listeners;
 
 import com.github.staffcore.StaffCore;
 import com.github.staffcore.commands.UtilityCommands;
+import com.github.staffcore.punishment.Punishment;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -39,6 +44,19 @@ public class UtilityListener implements Listener {
         // Cache IP and username on join as well for /check alt tracking
         if (player.getAddress() != null && player.getAddress().getAddress() != null) {
             plugin.getPunishmentManager().cachePlayerIp(uuid, player.getName(), player.getAddress().getAddress().getHostAddress());
+        }
+
+        // If player is actively jailed, teleport them to their assigned jail
+        Punishment activeJail = plugin.getPunishmentManager().getActiveJail(uuid);
+        if (activeJail != null) {
+            Location jailLoc = plugin.getPunishmentManager().getAssignedJailLocation(uuid);
+            if (jailLoc != null) {
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (player.isOnline()) {
+                        player.teleport(jailLoc);
+                    }
+                }, 2L);
+            }
         }
 
         applySavedStates(player);
@@ -67,6 +85,127 @@ public class UtilityListener implements Listener {
         if (UtilityCommands.flySpeeds.containsKey(uuid)) {
             float flySpeed = UtilityCommands.flySpeeds.get(uuid);
             player.setFlySpeed(Math.min(1.0f, Math.max(0.0f, flySpeed)));
+        }
+    }
+
+    /**
+     * Respawn jailed players back inside jail when they die.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        Punishment activeJail = plugin.getPunishmentManager().getActiveJail(player.getUniqueId());
+        if (activeJail != null) {
+            Location jailLoc = plugin.getPunishmentManager().getAssignedJailLocation(player.getUniqueId());
+            if (jailLoc != null) {
+                event.setRespawnLocation(jailLoc);
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (player.isOnline()) {
+                        player.teleport(jailLoc);
+                    }
+                }, 1L);
+            }
+        }
+    }
+
+    /**
+     * Block commands while jailed.
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onJailedCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+        Punishment activeJail = plugin.getPunishmentManager().getActiveJail(player.getUniqueId());
+        if (activeJail != null && !player.hasPermission("staffcore.bypass.jail") && !player.isOp()) {
+            event.setCancelled(true);
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.command-blocked-jailed", "&cYou cannot execute commands while jailed!")));
+        }
+    }
+
+    /**
+     * Block throwing Ender Pearls, Splash Potions, Tridents, Wind Charges, etc. while jailed.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onProjectileLaunch(ProjectileLaunchEvent event) {
+        if (event.getEntity().getShooter() instanceof Player) {
+            Player player = (Player) event.getEntity().getShooter();
+            if (plugin.getPunishmentManager().getActiveJail(player.getUniqueId()) != null) {
+                event.setCancelled(true);
+                player.updateInventory();
+                player.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.action-blocked-jailed", "&cYou cannot interact, throw items, or break blocks while jailed!")));
+            }
+        }
+    }
+
+    /**
+     * Block right-clicking Ender Pearls, Chorus Fruit, Buckets, Boats, Chests, etc. while jailed.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onJailedInteract(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        if (plugin.getPunishmentManager().getActiveJail(player.getUniqueId()) != null) {
+            event.setCancelled(true);
+            if (event.getItem() != null) {
+                String matName = event.getItem().getType().name();
+                if (matName.contains("PEARL") || matName.contains("CHORUS") || matName.contains("POTION") ||
+                    matName.contains("WIND_CHARGE") || matName.contains("FIREWORK") || matName.contains("BOW")) {
+                    player.updateInventory();
+                    player.sendMessage(plugin.getMessageManager().color(
+                            plugin.getConfig().getString("messages.action-blocked-jailed", "&cYou cannot interact, throw items, or break blocks while jailed!")));
+                }
+            }
+        }
+    }
+
+    /**
+     * Block eating Chorus Fruit or drinking potions while jailed.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onItemConsume(PlayerItemConsumeEvent event) {
+        Player player = event.getPlayer();
+        if (plugin.getPunishmentManager().getActiveJail(player.getUniqueId()) != null) {
+            String matName = event.getItem().getType().name();
+            if (matName.contains("CHORUS") || matName.contains("POTION") || matName.contains("MILK")) {
+                event.setCancelled(true);
+                player.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.action-blocked-jailed", "&cYou cannot interact, throw items, or break blocks while jailed!")));
+            }
+        }
+    }
+
+    /**
+     * Block Ender Pearl, Chorus Fruit, and Portal teleports while jailed.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerTeleport(PlayerTeleportEvent event) {
+        Player player = event.getPlayer();
+        if (plugin.getPunishmentManager().getActiveJail(player.getUniqueId()) != null) {
+            String cause = event.getCause().name();
+            if (cause.equals("ENDER_PEARL") || cause.equals("CHORUS_FRUIT") ||
+                cause.equals("NETHER_PORTAL") || cause.equals("END_PORTAL") || cause.equals("END_GATEWAY")) {
+                event.setCancelled(true);
+                player.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.action-blocked-jailed", "&cYou cannot interact, throw items, or break blocks while jailed!")));
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
+        if (plugin.getPunishmentManager().getActiveJail(event.getPlayer().getUniqueId()) != null) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.action-blocked-jailed", "&cYou cannot interact, throw items, or break blocks while jailed!")));
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        if (plugin.getPunishmentManager().getActiveJail(event.getPlayer().getUniqueId()) != null) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.action-blocked-jailed", "&cYou cannot interact, throw items, or break blocks while jailed!")));
         }
     }
 

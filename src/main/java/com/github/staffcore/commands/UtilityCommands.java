@@ -41,6 +41,8 @@ public class UtilityCommands implements CommandExecutor {
     public static final String INVSEE_PREFIX = ChatColor.DARK_GRAY + "Invsee: " + ChatColor.DARK_RED;
     public static final String ARMOR_PREFIX = ChatColor.DARK_GRAY + "Armor: " + ChatColor.DARK_RED;
 
+    private static Set<String> cachedGiveableItemNames = null;
+
     public UtilityCommands(StaffCore plugin) {
         this.plugin = plugin;
     }
@@ -949,7 +951,7 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         Material mat = matchEasyMaterial(args[1]);
-        if (mat == null || mat == Material.AIR) {
+        if (mat == null || getRawEnumName(mat).equals("AIR")) {
             sender.sendMessage(ChatColor.RED + "Item '" + args[1] + "' not found! Press TAB to autocomplete item names.");
             return true;
         }
@@ -966,7 +968,7 @@ public class UtilityCommands implements CommandExecutor {
             }
         }
 
-        String itemName = mat.name().toLowerCase().replace("legacy_", "").replace("_", " ");
+        String itemName = getRawEnumName(mat).toLowerCase().replace("legacy_", "").replace("_", " ");
 
         if (args[0].equals("*")) {
             int count = 0;
@@ -1002,17 +1004,72 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     /**
-     * Resolves ALL materials across 1.8.8 - 1.21+, including Netherite items, Tridents, Maces, etc.,
-     * bypassing Spigot's legacy Commodore filter via reflection.
+     * Reads the true enum name via java.lang.Enum#name so Spigot's Commodore bytecode remapper
+     * cannot intercept Material#name.
+     */
+    public static String getRawEnumName(Material m) {
+        if (m == null) return "";
+        return ((Enum<?>) m).name();
+    }
+
+    /**
+     * Bypasses Spigot's Commodore bytecode filter by loading org.bukkit.Material dynamically
+     * via Class.forName and returning all runtime enum constants.
      */
     public static Material[] getAllRuntimeMaterials() {
         try {
-            Material[] constants = Material.class.getEnumConstants();
-            if (constants != null && constants.length > 0) {
-                return constants;
+            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
+            Object[] constants = matClass.getEnumConstants();
+            if (constants instanceof Material[] && constants.length > 0) {
+                return (Material[]) constants;
             }
         } catch (Throwable ignored) {}
         return Material.values();
+    }
+
+    /**
+     * Builds and caches the complete set of giveable item names on the server (1.8.8 - 1.21+).
+     */
+    public static Set<String> getAllGiveableItemNames() {
+        if (cachedGiveableItemNames != null && !cachedGiveableItemNames.isEmpty()) {
+            return cachedGiveableItemNames;
+        }
+
+        Set<String> items = new TreeSet<>();
+        Method isItemMethod = null;
+        try {
+            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
+            isItemMethod = matClass.getMethod("isItem");
+        } catch (Throwable ignored) {}
+
+        for (Material m : getAllRuntimeMaterials()) {
+            if (m == null) continue;
+            String rawName = getRawEnumName(m);
+            if (rawName.startsWith("LEGACY_") || rawName.equals("AIR") || rawName.endsWith("_AIR")) {
+                continue;
+            }
+            if (isItemMethod != null) {
+                try {
+                    Boolean giveable = (Boolean) isItemMethod.invoke(m);
+                    if (giveable != null && !giveable) {
+                        continue;
+                    }
+                } catch (Throwable ignored) {}
+            }
+            items.add(rawName.toLowerCase());
+        }
+
+        // Ensure common shorthand aliases are also suggested
+        items.addAll(Arrays.asList(
+            "netherite_sword", "netherite_pickaxe", "netherite_axe", "netherite_shovel", "netherite_hoe",
+            "netherite_helmet", "netherite_chestplate", "netherite_leggings", "netherite_boots",
+            "netherite_ingot", "netherite_scrap", "netherite_block", "netherite_upgrade_smithing_template",
+            "ancient_debris", "trident", "crossbow", "elytra", "shulker_box", "mace", "wind_charge", "heavy_core",
+            "golden_apple", "enchanted_golden_apple", "totem_of_undying", "ender_pearl", "experience_bottle", "command_block", "steak"
+        ));
+
+        cachedGiveableItemNames = Collections.unmodifiableSet(items);
+        return cachedGiveableItemNames;
     }
 
     public static Material matchEasyMaterial(String input) {
@@ -1022,38 +1079,25 @@ public class UtilityCommands implements CommandExecutor {
             clean = clean.replace("NETHERRITE", "NETHERITE");
         }
 
-        // 1. Try Spigot 1.13+ non-legacy matchMaterial(name, false) via reflection first (supports Netherite & 1.13-1.21+ items!)
-        try {
-            Method matchModern = Material.class.getMethod("matchMaterial", String.class, boolean.class);
-            Material m = (Material) matchModern.invoke(null, clean, false);
-            if (m != null) return m;
-        } catch (Throwable ignored) {}
-
-        // 2. Try Spigot 1.13+ getMaterial(name, false) via reflection
-        try {
-            Method getModern = Material.class.getMethod("getMaterial", String.class, boolean.class);
-            Material m = (Material) getModern.invoke(null, clean, false);
-            if (m != null) return m;
-        } catch (Throwable ignored) {}
-
-        // 3. Scan actual runtime enum constants directly (bypasses Commodore legacy filter)
+        // 1. Scan actual runtime enum constants first using Enum#name (bypasses Commodore legacy filter)
         Material[] allMaterials = getAllRuntimeMaterials();
         for (Material m : allMaterials) {
-            if (m.name().startsWith("LEGACY_")) continue;
-            if (m.name().equalsIgnoreCase(clean)) {
+            String rawName = getRawEnumName(m);
+            if (rawName.startsWith("LEGACY_")) continue;
+            if (rawName.equalsIgnoreCase(clean)) {
                 return m;
             }
         }
 
-        // 4. Direct matchMaterial / valueOf
-        Material direct = Material.matchMaterial(clean);
-        if (direct != null) return direct;
-
+        // 2. Try Spigot 1.13+ non-legacy matchMaterial(name, false) via reflection
         try {
-            return Material.valueOf(clean);
-        } catch (IllegalArgumentException ignored) {}
+            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
+            Method matchModern = matClass.getMethod("matchMaterial", String.class, boolean.class);
+            Material m = (Material) matchModern.invoke(null, clean, false);
+            if (m != null) return m;
+        } catch (Throwable ignored) {}
 
-        // 5. Common shorthand aliases (including Netherite shorthands)
+        // 3. Common shorthand aliases (including Netherite shorthands)
         String compact = clean.toLowerCase().replace("_", "");
         switch (compact) {
             case "gap":
@@ -1113,31 +1157,37 @@ public class UtilityCommands implements CommandExecutor {
                 break;
         }
 
-        // 6. Fuzzy match against all non-legacy runtime enum constants
+        // 4. Fuzzy match against all non-legacy runtime enum constants
         for (Material m : allMaterials) {
-            if (m.name().startsWith("LEGACY_")) continue;
-            if (m.name().replace("_", "").equalsIgnoreCase(compact)) {
+            String rawName = getRawEnumName(m);
+            if (rawName.startsWith("LEGACY_")) continue;
+            if (rawName.replace("_", "").equalsIgnoreCase(compact)) {
                 return m;
             }
         }
         for (Material m : allMaterials) {
-            if (m.name().startsWith("LEGACY_")) continue;
-            if (m.name().toLowerCase().startsWith(clean.toLowerCase())) {
+            String rawName = getRawEnumName(m);
+            if (rawName.startsWith("LEGACY_")) continue;
+            if (rawName.toLowerCase().startsWith(clean.toLowerCase())) {
                 return m;
             }
         }
-        return null;
+
+        // 5. Fallback to legacy matchMaterial
+        return Material.matchMaterial(clean);
     }
 
     private static Material findRuntimeMaterial(String primary, String fallback) {
         for (Material m : getAllRuntimeMaterials()) {
-            if (primary != null && m.name().equalsIgnoreCase(primary)) {
+            String rawName = getRawEnumName(m);
+            if (primary != null && rawName.equalsIgnoreCase(primary)) {
                 return m;
             }
         }
         if (fallback != null) {
             for (Material m : getAllRuntimeMaterials()) {
-                if (m.name().equalsIgnoreCase(fallback)) {
+                String rawName = getRawEnumName(m);
+                if (rawName.equalsIgnoreCase(fallback)) {
                     return m;
                 }
             }

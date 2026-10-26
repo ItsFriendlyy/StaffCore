@@ -60,7 +60,6 @@ public class PunishmentManager {
             for (Player online : Bukkit.getOnlinePlayers()) {
                 UUID uuid = online.getUniqueId();
                 if (playerJailMap.containsKey(uuid)) {
-                    // Automatically unjails if expired
                     getActiveJail(uuid);
                 }
             }
@@ -290,31 +289,47 @@ public class PunishmentManager {
             }
         }
 
-        Player online = targetUUID != null ? Bukkit.getPlayer(targetUUID) : Bukkit.getPlayerExact(targetName);
-        if (online != null && online.isOnline()) {
-            if (!previousLocations.containsKey(online.getUniqueId())) {
-                previousLocations.put(online.getUniqueId(), online.getLocation().clone());
-            }
-            if (jailLoc != null) {
-                online.teleport(jailLoc);
-            }
-            String timeStr = duration > 0 ? TimeUtil.formatDuration(duration) : "Permanent";
-            online.sendMessage(plugin.getMessageManager().color("&c&m--------------------------------------------------"));
-            online.sendMessage(plugin.getMessageManager().color("&c&lYOU HAVE BEEN JAILED! &7(Jail: &e" + cleanJail + "&7)"));
-            online.sendMessage(plugin.getMessageManager().color("&7Staff: &f" + staffName));
-            online.sendMessage(plugin.getMessageManager().color("&7Reason: &f" + reason));
-            online.sendMessage(plugin.getMessageManager().color("&7Duration: &e" + timeStr));
-            online.sendMessage(plugin.getMessageManager().color("&c&m--------------------------------------------------"));
-        }
-
         if (targetUUID != null) {
             playerJailMap.put(targetUUID, cleanJail);
         }
 
+        Player online = targetUUID != null ? Bukkit.getPlayer(targetUUID) : Bukkit.getPlayerExact(targetName);
         String ip = (online != null && online.getAddress() != null && online.getAddress().getAddress() != null)
                 ? online.getAddress().getAddress().getHostAddress() : getLastKnownIp(targetUUID);
         PunishmentType type = duration > 0 ? PunishmentType.TEMP_JAIL : PunishmentType.JAIL;
-        return createPunishment(targetUUID, targetName, ip != null ? ip : "", staffName, type, reason, duration, silent);
+        Punishment created = createPunishment(targetUUID, targetName, ip != null ? ip : "", staffName, type, reason, duration, silent);
+
+        if (online != null && online.isOnline()) {
+            if (!previousLocations.containsKey(online.getUniqueId())) {
+                previousLocations.put(online.getUniqueId(), online.getLocation().clone());
+                saveData();
+            }
+            if (jailLoc != null) {
+                online.teleport(jailLoc);
+            }
+
+            String remaining = duration > 0 ? TimeUtil.formatRemaining(created.getExpireTime()) : "Permanent";
+            String path = duration > 0 ? "jail.temporary-chat" : "jail.permanent-chat";
+            List<String> lines = plugin.getMessageManager().getMessageList(path);
+            if (lines == null || lines.isEmpty()) {
+                lines = Arrays.asList(
+                        "&c&m--------------------------------------------------",
+                        duration > 0 ? "&cYou have been temporarily jailed in &e%jail%&c!" : "&cYou have been permanently jailed in &e%jail%&c!",
+                        "&7Reason: &f%reason%",
+                        duration > 0 ? "&7Remaining time: &e%remaining%" : "&7Jailed by: &f%staff%",
+                        "&c&m--------------------------------------------------"
+                );
+            }
+            for (String line : lines) {
+                online.sendMessage(plugin.getMessageManager().color(line
+                        .replace("%jail%", cleanJail)
+                        .replace("%reason%", reason)
+                        .replace("%staff%", staffName)
+                        .replace("%remaining%", remaining)));
+            }
+        }
+
+        return created;
     }
 
     public boolean unjail(UUID targetUUID) {
@@ -340,7 +355,8 @@ public class PunishmentManager {
                 } else if (!Bukkit.getWorlds().isEmpty()) {
                     online.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
                 }
-                online.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aYou have been released from jail!"));
+                online.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("jail.unjail-target", "&aYou have been released from jail!")));
             }
         }
         return changed;
@@ -821,9 +837,9 @@ public class PunishmentManager {
             String msg = plugin.getConfig().getString(formatKey);
             if (msg == null) {
                 if (p.getType() == PunishmentType.JAIL) {
-                    msg = "&c&lJAIL &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%";
+                    msg = "&c&lPUNISH &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%";
                 } else if (p.getType() == PunishmentType.TEMP_JAIL) {
-                    msg = "&c&lJAIL &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%";
+                    msg = "&c&lPUNISH &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%";
                 } else {
                     msg = plugin.getConfig().getString("broadcasts.public.ban", "&c&lPUNISH &8» &f%target% was punished by &f%staff% for: %reason%");
                 }

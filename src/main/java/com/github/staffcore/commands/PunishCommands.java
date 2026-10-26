@@ -65,7 +65,7 @@ public class PunishCommands implements CommandExecutor {
 
     private boolean handleSetJail(CommandSender sender, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage(plugin.getMessageManager().color("&cOnly in-game players can set a jail location!"));
+            sender.sendMessage(plugin.getMessageManager().color("&cThis command can only be executed by a player in-game!"));
             return true;
         }
         if (args.length < 1) {
@@ -76,7 +76,9 @@ public class PunishCommands implements CommandExecutor {
         Player staff = (Player) sender;
         String jailName = args[0].toLowerCase();
         plugin.getPunishmentManager().setJailLocation(jailName, staff.getLocation());
-        staff.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aSuccessfully set jail &e" + jailName + " &aat your current location!"));
+        staff.sendMessage(plugin.getMessageManager().color(
+                plugin.getConfig().getString("messages.setjail-success", "&aSuccessfully set jail &e%jail% &aat your current location.")
+                        .replace("%jail%", jailName)));
         return true;
     }
 
@@ -87,9 +89,13 @@ public class PunishCommands implements CommandExecutor {
         }
         String jailName = args[0].toLowerCase();
         if (plugin.getPunishmentManager().deleteJail(jailName)) {
-            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aDeleted jail &e" + jailName + "&a."));
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.deljail-success", "&aSuccessfully deleted jail &e%jail%&a.")
+                            .replace("%jail%", jailName)));
         } else {
-            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &cJail &e" + jailName + " &cdoes not exist!"));
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.jail-not-found", "&cJail &e%jail% &cwas not found! Set it first with &e/setjail %jail%&c.")
+                            .replace("%jail%", jailName)));
         }
         return true;
     }
@@ -97,11 +103,8 @@ public class PunishCommands implements CommandExecutor {
     private boolean handleJail(CommandSender sender, String[] args, boolean temporary) {
         int minArgs = temporary ? 3 : 2;
         if (args.length < minArgs) {
-            if (temporary) {
-                sender.sendMessage(plugin.getMessageManager().color("&cUsage: /tempjail <player> <jail_name> <duration> [reason] [-s]"));
-            } else {
-                sender.sendMessage(plugin.getMessageManager().color("&cUsage: /jail <player> <jail_name> [reason] [-s]"));
-            }
+            sender.sendMessage(plugin.getMessageManager().color(
+                    "&cUsage: /" + (temporary ? "tempjail" : "jail") + " <player> <jail_name> " + (temporary ? "<duration> " : "") + "[reason] [-s]"));
             return true;
         }
 
@@ -109,7 +112,9 @@ public class PunishCommands implements CommandExecutor {
         String jailName = args[1].toLowerCase();
         Location jailLoc = plugin.getPunishmentManager().getJailLocation(jailName);
         if (jailLoc == null) {
-            sender.sendMessage(plugin.getMessageManager().color("&cJail &e" + jailName + " &cdoes not exist! Create it first using &e/setjail " + jailName));
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.jail-not-found", "&cJail &e%jail% &cwas not found! Set it first with &e/setjail %jail%&c.")
+                            .replace("%jail%", jailName)));
             return true;
         }
 
@@ -131,12 +136,18 @@ public class PunishCommands implements CommandExecutor {
 
         Player onlineTarget = Bukkit.getPlayer(targetInput);
         if (onlineTarget != null) {
+            if (sender instanceof Player && onlineTarget.equals(sender)) {
+                sender.sendMessage(plugin.getMessageManager().getPrefixedMessage("messages.cannot-punish-self"));
+                return true;
+            }
+
             targetUUID = onlineTarget.getUniqueId();
             targetName = onlineTarget.getName();
 
             if (onlineTarget.hasPermission("staffcore.bypass.jail") || onlineTarget.isOp()) {
                 sender.sendMessage(plugin.getMessageManager().color(
-                        plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
+                        plugin.getConfig().getString("messages.cannot-jail-exempt",
+                                plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!"))
                                 .replace("%target%", targetName)));
                 return true;
             }
@@ -148,7 +159,7 @@ public class PunishCommands implements CommandExecutor {
                 targetName = offlineTarget.getName() != null ? offlineTarget.getName() : targetInput;
             } else {
                 sender.sendMessage(plugin.getMessageManager().color(
-                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer not found!")
+                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found or has never joined!")
                                 .replace("%target%", targetInput)));
                 return true;
             }
@@ -170,9 +181,13 @@ public class PunishCommands implements CommandExecutor {
 
         boolean success = plugin.getPunishmentManager().unjail(target.getUniqueId());
         if (success) {
-            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &aSuccessfully unjailed &e" + targetInput + "&a."));
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.unjail-success", "&aSuccessfully unjailed &e%target%&a.")
+                            .replace("%target%", targetInput)));
         } else {
-            sender.sendMessage(plugin.getMessageManager().color("&8[&cStaffCore&8] &cPlayer &e" + targetInput + " &cis not jailed!"));
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.not-jailed", "&cPlayer &e%target% &cis not jailed!")
+                            .replace("%target%", targetInput)));
         }
         return true;
     }

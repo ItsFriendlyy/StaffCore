@@ -11,6 +11,8 @@ import com.github.staffcore.util.UpdateChecker;
 import com.github.staffcore.vanish.VanishManager;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.ChatColor;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -23,6 +25,8 @@ public final class StaffCore extends JavaPlugin {
     private StaffChatManager staffChatManager;
     private VanishManager vanishManager;
     private UpdateChecker updateChecker;
+    private PunishCommands punishExecutor;
+    private UtilityCommands utilExecutor;
 
     public static final int BSTATS_PLUGIN_ID = 34872;
 
@@ -100,19 +104,23 @@ public final class StaffCore extends JavaPlugin {
     private void registerCommands() {
         StaffTabCompleter tabCompleter = new StaffTabCompleter(this);
 
-        // Moderation & Punishment Commands
-        PunishCommands punishExecutor = new PunishCommands(this);
-        String[] punishCmds = {"ban", "tempban", "ipban", "tempipban", "unban", "unbanip", "mute", "tempmute", "unmute", "warn"};
+        // Moderation & Punishment Commands (including Jail commands)
+        this.punishExecutor = new PunishCommands(this);
+        String[] punishCmds = {
+            "ban", "tempban", "ipban", "tempipban", "unban", "unbanip",
+            "mute", "tempmute", "unmute", "warn",
+            "setjail", "deljail", "jail", "tempjail", "unjail"
+        };
         for (String cmdName : punishCmds) {
             PluginCommand cmd = getCommand(cmdName);
             if (cmd != null) {
-                cmd.setExecutor(punishExecutor);
+                cmd.setExecutor(this.punishExecutor);
                 cmd.setTabCompleter(tabCompleter);
             }
         }
 
         // Staff Utilities
-        UtilityCommands utilExecutor = new UtilityCommands(this);
+        this.utilExecutor = new UtilityCommands(this);
         String[] utilCmds = {
             "gmc", "gms", "gmsp", "gma", "fly", "speed", "invincible",
             "tphere", "tpall", "invsee", "enchant", "sendserver",
@@ -122,7 +130,7 @@ public final class StaffCore extends JavaPlugin {
         for (String cmdName : utilCmds) {
             PluginCommand cmd = getCommand(cmdName);
             if (cmd != null) {
-                cmd.setExecutor(utilExecutor);
+                cmd.setExecutor(this.utilExecutor);
                 cmd.setTabCompleter(tabCompleter);
             }
         }
@@ -192,6 +200,20 @@ public final class StaffCore extends JavaPlugin {
                 return true;
             });
         }
+    }
+
+    /**
+     * Fallback command router so Bukkit never prints white usage text from plugin.yml.
+     */
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (punishExecutor != null && punishExecutor.onCommand(sender, command, label, args)) {
+            return true;
+        }
+        if (utilExecutor != null && utilExecutor.onCommand(sender, command, label, args)) {
+            return true;
+        }
+        return true;
     }
 
     public MessageManager getMessageManager() { return messageManager; }

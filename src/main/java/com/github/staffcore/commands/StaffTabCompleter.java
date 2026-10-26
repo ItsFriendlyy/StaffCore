@@ -2,7 +2,6 @@ package com.github.staffcore.commands;
 
 import com.github.staffcore.StaffCore;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
@@ -141,25 +140,32 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 4. /give <player|*> <item> [amount] (includes ALL runtime 1.8 - 1.21+ items & Netherite)
+        // 4. /give <player|*> <item> [amount] (Full modern 1.13-1.21+ & legacy item suggestions)
         if (cmd.equals("give")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], true);
             } else if (args.length == 2) {
-                Set<String> itemNames = new TreeSet<>();
-                for (Material m : UtilityCommands.getAllRuntimeMaterials()) {
-                    if (m != null && m != Material.AIR && !m.name().startsWith("LEGACY_")) {
-                        itemNames.add(m.name().toLowerCase());
+                String rawQuery = args[1].toLowerCase();
+                if (rawQuery.startsWith("minecraft:")) {
+                    rawQuery = rawQuery.substring("minecraft:".length());
+                }
+                // Auto-correct common "netherrite" spelling while typing
+                String query = rawQuery.replace("netherrite", "netherite");
+
+                Set<String> allItems = UtilityCommands.getAllGiveableItemNames();
+                List<String> prefixMatches = new ArrayList<>();
+                List<String> containsMatches = new ArrayList<>();
+
+                for (String item : allItems) {
+                    if (item.startsWith(query)) {
+                        prefixMatches.add(item);
+                    } else if (!query.isEmpty() && item.contains(query)) {
+                        containsMatches.add(item);
                     }
                 }
-                itemNames.addAll(Arrays.asList(
-                    "netherite_sword", "netherite_pickaxe", "netherite_axe", "netherite_shovel", "netherite_hoe",
-                    "netherite_helmet", "netherite_chestplate", "netherite_leggings", "netherite_boots",
-                    "netherite_ingot", "netherite_scrap", "netherite_block", "netherite_upgrade_smithing_template",
-                    "ancient_debris", "trident", "crossbow", "elytra", "mace", "wind_charge", "heavy_core",
-                    "golden_apple", "enchanted_golden_apple", "totem_of_undying", "ender_pearl", "experience_bottle", "command_block", "steak"
-                ));
-                StringUtil.copyPartialMatches(args[1].toLowerCase(), itemNames, completions);
+
+                completions.addAll(prefixMatches);
+                completions.addAll(containsMatches);
                 return completions;
             } else if (args.length == 3) {
                 List<String> amounts = Arrays.asList("1", "16", "32", "64");

@@ -53,6 +53,7 @@ messages:
   cannot-punish-self: "&cYou cannot punish yourself!"
   cannot-punish-exempt: "&cYou cannot punish &e%target% &cbecause they have bypass permissions!"
   cannot-freeze-exempt: "&cYou cannot freeze &e%target% &cbecause they have bypass permissions!"
+  cannot-jail-exempt: "&cYou cannot jail &e%target% &cbecause they have bypass permissions!"
   invalid-duration: "&cInvalid duration format! Example: 10m, 2h, 1d, 7d"
   unban-success: "&aSuccessfully unbanned &e%target%&a."
   not-banned: "&cPlayer &e%target% &cis not banned!"
@@ -60,9 +61,16 @@ messages:
   ip-not-banned: "&cIP address &e%ip% &cis not banned!"
   unmute-success: "&aSuccessfully unmuted &e%target%&a."
   not-muted: "&cPlayer &e%target% &cis not muted!"
+  setjail-success: "&aSuccessfully set jail &e%jail% &aat your current location."
+  deljail-success: "&aSuccessfully deleted jail &e%jail%&a."
+  jail-not-found: "&cJail &e%jail% &cwas not found! Set it first with &e/setjail %jail%&c."
+  unjail-success: "&aSuccessfully unjailed &e%target%&a."
+  not-jailed: "&cPlayer &e%target% &cis not jailed!"
   reload-success: "&aStaffCore configuration and data reloaded successfully!"
   command-blocked-frozen: "&cYou cannot execute commands while frozen!"
   action-blocked-frozen: "&cYou cannot interact or break blocks while frozen!"
+  command-blocked-jailed: "&cYou cannot execute commands while jailed!"
+  action-blocked-jailed: "&cYou cannot interact, throw items, or break blocks while jailed!"
 
   # BungeeCord & Network Messages
   bungee-disabled: "&cBungeeCord support is disabled in config.yml!"
@@ -135,6 +143,23 @@ mute:
     - "&7Remaining time: &e%remaining%"
     - "&c&m--------------------------------------------------"
 
+# Jail notifications
+jail:
+  permanent-chat:
+    - "&c&m--------------------------------------------------"
+    - "&cYou have been permanently jailed in &e%jail%&c!"
+    - "&7Reason: &f%reason%"
+    - "&7Jailed by: &f%staff%"
+    - "&c&m--------------------------------------------------"
+  temporary-chat:
+    - "&c&m--------------------------------------------------"
+    - "&cYou have been temporarily jailed in &e%jail%&c!"
+    - "&7Reason: &f%reason%"
+    - "&7Remaining time: &e%remaining%"
+    - "&7Jailed by: &f%staff%"
+    - "&c&m--------------------------------------------------"
+  unjail-target: "&aYou have been released from jail!"
+
 # Warning system & auto-ban settings
 warning:
   # Number of active warnings before a player is automatically permanently banned
@@ -187,6 +212,8 @@ broadcasts:
     tempipban: "&c&lPUNISH &8» &f%target% &7was IP-banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
     mute: "&c&lPUNISH &8» &f%target% &7was permanently muted by &f%staff% &7for: &e%reason%"
     tempmute: "&c&lPUNISH &8» &f%target% &7was muted for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    jail: "&c&lPUNISH &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%"
+    tempjail: "&c&lPUNISH &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%"
     warn: "&6&lWARNING &8» &f%target% &7was warned by &f%staff% &7for: &e%reason%"
 
   # Silent broadcast sent ONLY to staff (staffcore.broadcast.silent) when -s IS used
@@ -197,4 +224,6 @@ broadcasts:
     tempipban: "&8[&cSilent&8] &7%staff% temp IP-banned &e%target% &7for &e%duration% &7for: &f%reason%"
     mute: "&8[&cSilent&8] &7%staff% permanently muted &e%target% &7for: &f%reason%"
     tempmute: "&8[&cSilent&8] &7%staff% temp-muted &e%target% &7for &e%duration% &7for: &f%reason%"
+    jail: "&8[&cSilent&8] &7%staff% permanently jailed &e%target% &7for: &f%reason%"
+    tempjail: "&8[&cSilent&8] &7%staff% temp-jailed &e%target% &7for &e%duration% &7for: &f%reason%"
     warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%"
