@@ -51,9 +51,8 @@ public class StaffTabCompleter implements TabCompleter {
             return completions;
         }
 
-        // 2. /vanish, /repair, /cleargrounditems, /setjail, /setspawn, /setwarp, /sethome
-        if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") || cmd.equals("setjail") ||
-            cmd.equals("setspawn") || cmd.equals("setwarp") || cmd.equals("sethome") ||
+        // 2. Commands without tab completion
+        if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") || cmd.equals("setjail") || cmd.equals("setspawn") ||
             cmd.equals("cleargrounditems") || cmd.equals("cleargrouditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
             return Collections.emptyList();
         }
@@ -66,8 +65,8 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 2b. /warp <warp_name> [player|*] & /delwarp <warp_name>
-        if (cmd.equals("warp") || cmd.equals("delwarp")) {
+        // 2b. /warp <warp_name> [player|*] & /delwarp <warp_name> & /setwarp [warp_name]
+        if (cmd.equals("warp") || cmd.equals("delwarp") || cmd.equals("setwarp")) {
             if (args.length == 1) {
                 StringUtil.copyPartialMatches(args[0].toLowerCase(), UtilityCommands.getWarpNames(), completions);
                 Collections.sort(completions);
@@ -78,11 +77,15 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 2c. /home <home_name> & /delhome <home_name>
-        if (cmd.equals("home") || cmd.equals("delhome")) {
+        // 2c. /home <home_name>, /delhome <home_name>, /sethome [home_name]
+        if (cmd.equals("home") || cmd.equals("delhome") || cmd.equals("sethome")) {
             if (args.length == 1 && sender instanceof Player) {
                 Player player = (Player) sender;
-                StringUtil.copyPartialMatches(args[0].toLowerCase(), UtilityCommands.getPlayerHomeNames(player.getUniqueId()), completions);
+                Set<String> homes = new TreeSet<>(UtilityCommands.getPlayerHomeNames(player.getUniqueId()));
+                if (cmd.equals("sethome") && !homes.contains("home")) {
+                    homes.add("home");
+                }
+                StringUtil.copyPartialMatches(args[0].toLowerCase(), homes, completions);
                 Collections.sort(completions);
                 return completions;
             }

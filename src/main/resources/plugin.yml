@@ -1,5 +1,5 @@
 name: StaffCore
-version: 1.2.3
+version: 1.2.4
 main: com.github.staffcore.StaffCore
 author: StaffCoreDev
 description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, Jail, Spawn, Warps, Homes, BungeeCord, and Utilities.

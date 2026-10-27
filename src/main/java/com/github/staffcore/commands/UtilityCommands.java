@@ -1,6 +1,7 @@
 package com.github.staffcore.commands;
 
 import com.github.staffcore.StaffCore;
+import com.github.staffcore.gui.TeleportGui;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -41,7 +42,10 @@ public class UtilityCommands implements CommandExecutor {
     // Spawn, Warps, and Homes storage (persisted in states.yml)
     public static Location spawnLocation = null;
     public static final Map<String, Location> warps = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    public static final Map<String, String> warpIcons = new HashMap<>();
+
     public static final Map<UUID, Map<String, Location>> playerHomes = new HashMap<>();
+    public static final Map<UUID, Map<String, String>> playerHomeIcons = new HashMap<>();
 
     private static List<String> cachedGiveableItemNames = null;
 
@@ -87,6 +91,29 @@ public class UtilityCommands implements CommandExecutor {
         return Collections.unmodifiableSet(homes.keySet());
     }
 
+    public static String getWarpIcon(String warpName) {
+        if (warpName == null) return "end";
+        return warpIcons.getOrDefault(warpName.toLowerCase(), "end");
+    }
+
+    public static void setWarpIcon(String warpName, String iconId) {
+        if (warpName == null || iconId == null) return;
+        warpIcons.put(warpName.toLowerCase(), iconId.toLowerCase());
+    }
+
+    public static String getHomeIcon(UUID uuid, String homeName) {
+        if (uuid == null || homeName == null) return "home";
+        Map<String, String> map = playerHomeIcons.get(uuid);
+        if (map == null) return "home";
+        return map.getOrDefault(homeName.toLowerCase(), "home");
+    }
+
+    public static void setHomeIcon(UUID uuid, String homeName, String iconId) {
+        if (uuid == null || homeName == null || iconId == null) return;
+        Map<String, String> map = playerHomeIcons.computeIfAbsent(uuid, k -> new HashMap<>());
+        map.put(homeName.toLowerCase(), iconId.toLowerCase());
+    }
+
     public static Location getSpawnLocation() {
         return spawnLocation != null ? spawnLocation.clone() : null;
     }
@@ -103,7 +130,9 @@ public class UtilityCommands implements CommandExecutor {
         flySpeeds.clear();
         spawnLocation = null;
         warps.clear();
+        warpIcons.clear();
         playerHomes.clear();
+        playerHomeIcons.clear();
 
         for (String s : data.getStringList("invincible")) {
             try {
@@ -139,13 +168,11 @@ public class UtilityCommands implements CommandExecutor {
             }
         }
 
-        // Load Spawn
         ConfigurationSection spawnSec = data.getConfigurationSection("spawn");
         if (spawnSec != null) {
             spawnLocation = deserializeLocation(spawnSec);
         }
 
-        // Load Warps
         ConfigurationSection warpSec = data.getConfigurationSection("warps");
         if (warpSec != null) {
             for (String warpName : warpSec.getKeys(false)) {
@@ -156,7 +183,16 @@ public class UtilityCommands implements CommandExecutor {
             }
         }
 
-        // Load Homes
+        ConfigurationSection warpIconsSec = data.getConfigurationSection("warp-icons");
+        if (warpIconsSec != null) {
+            for (String warpName : warpIconsSec.getKeys(false)) {
+                String icon = warpIconsSec.getString(warpName);
+                if (icon != null) {
+                    warpIcons.put(warpName.toLowerCase(), icon);
+                }
+            }
+        }
+
         ConfigurationSection homesSec = data.getConfigurationSection("homes");
         if (homesSec != null) {
             for (String uuidStr : homesSec.getKeys(false)) {
@@ -173,6 +209,28 @@ public class UtilityCommands implements CommandExecutor {
                         }
                         if (!map.isEmpty()) {
                             playerHomes.put(uuid, map);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        ConfigurationSection homeIconsSec = data.getConfigurationSection("home-icons");
+        if (homeIconsSec != null) {
+            for (String uuidStr : homeIconsSec.getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(uuidStr);
+                    ConfigurationSection userIcons = homeIconsSec.getConfigurationSection(uuidStr);
+                    if (userIcons != null) {
+                        Map<String, String> iconMap = new HashMap<>();
+                        for (String homeName : userIcons.getKeys(false)) {
+                            String icon = userIcons.getString(homeName);
+                            if (icon != null) {
+                                iconMap.put(homeName.toLowerCase(), icon);
+                            }
+                        }
+                        if (!iconMap.isEmpty()) {
+                            playerHomeIcons.put(uuid, iconMap);
                         }
                     }
                 } catch (Exception ignored) {}
@@ -208,21 +266,33 @@ public class UtilityCommands implements CommandExecutor {
             data.set("fly-speed." + entry.getKey().toString(), entry.getValue());
         }
 
-        // Save Spawn
         if (spawnLocation != null) {
             serializeLocation(data, "spawn", spawnLocation);
         }
 
-        // Save Warps
+        data.set("warps", null);
         for (Map.Entry<String, Location> entry : warps.entrySet()) {
             serializeLocation(data, "warps." + entry.getKey().toLowerCase(), entry.getValue());
         }
 
-        // Save Homes
+        data.set("warp-icons", null);
+        for (Map.Entry<String, String> entry : warpIcons.entrySet()) {
+            data.set("warp-icons." + entry.getKey().toLowerCase(), entry.getValue());
+        }
+
+        data.set("homes", null);
         for (Map.Entry<UUID, Map<String, Location>> userEntry : playerHomes.entrySet()) {
             String base = "homes." + userEntry.getKey().toString();
             for (Map.Entry<String, Location> homeEntry : userEntry.getValue().entrySet()) {
                 serializeLocation(data, base + "." + homeEntry.getKey().toLowerCase(), homeEntry.getValue());
+            }
+        }
+
+        data.set("home-icons", null);
+        for (Map.Entry<UUID, Map<String, String>> userEntry : playerHomeIcons.entrySet()) {
+            String base = "home-icons." + userEntry.getKey().toString();
+            for (Map.Entry<String, String> iconEntry : userEntry.getValue().entrySet()) {
+                data.set(base + "." + iconEntry.getKey().toLowerCase(), iconEntry.getValue());
             }
         }
 
@@ -277,40 +347,30 @@ public class UtilityCommands implements CommandExecutor {
         Inventory gui = Bukkit.createInventory(null, 54, INVSEE_PREFIX + target.getName());
         ItemStack pane = createGrayPane();
 
-        // Row 0: Equipment (Slots 0 to 8)
         gui.setItem(0, target.getInventory().getHelmet());
         gui.setItem(1, target.getInventory().getChestplate());
         gui.setItem(2, target.getInventory().getLeggings());
         gui.setItem(3, target.getInventory().getBoots());
-
-        // Slot 4: Spacer between Armor and Off-Hand
         gui.setItem(4, pane);
 
-        // Slot 5: Off-Hand item (Reflection for 1.9+ servers)
         try {
             Method m = target.getInventory().getClass().getMethod("getItemInOffHand");
             ItemStack offhand = (ItemStack) m.invoke(target.getInventory());
-            if (offhand != null) {
-                gui.setItem(5, offhand);
-            }
+            if (offhand != null) gui.setItem(5, offhand);
         } catch (Throwable ignored) {}
 
-        // Slots 6, 7, 8: Gray glass panes
         gui.setItem(6, pane);
         gui.setItem(7, pane);
         gui.setItem(8, pane);
 
-        // Row 1: Divider row (Slots 9 to 17)
         for (int i = 9; i <= 17; i++) {
             gui.setItem(i, pane);
         }
 
-        // Rows 2, 3, 4: Main Inventory (Slots 18 to 44 -> target slots 9 to 35)
         for (int i = 9; i <= 35; i++) {
             gui.setItem(18 + (i - 9), target.getInventory().getItem(i));
         }
 
-        // Row 5: Hotbar (Slots 45 to 53 -> target slots 0 to 8)
         for (int i = 0; i <= 8; i++) {
             gui.setItem(45 + i, target.getInventory().getItem(i));
         }
@@ -323,24 +383,20 @@ public class UtilityCommands implements CommandExecutor {
     public static void syncGuiToTarget(Inventory top, Player target) {
         if (top == null || target == null || !target.isOnline()) return;
 
-        // 1. Armor (Slots 0 to 3)
         target.getInventory().setHelmet(top.getItem(0));
         target.getInventory().setChestplate(top.getItem(1));
         target.getInventory().setLeggings(top.getItem(2));
         target.getInventory().setBoots(top.getItem(3));
 
-        // 2. Off-hand (Slot 5) via reflection for 1.9+
         try {
             Method m = target.getInventory().getClass().getMethod("setItemInOffHand", ItemStack.class);
             m.invoke(target.getInventory(), top.getItem(5));
         } catch (Throwable ignored) {}
 
-        // 3. Main inventory (Slots 18-44 -> target slots 9-35)
         for (int i = 9; i <= 35; i++) {
             target.getInventory().setItem(i, top.getItem(18 + (i - 9)));
         }
 
-        // 4. Hotbar (Slots 45-53 -> target slots 0-8)
         for (int i = 0; i <= 8; i++) {
             target.getInventory().setItem(i, top.getItem(45 + i));
         }
@@ -362,78 +418,44 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         switch (cmd) {
-            case "gmc":
-                return handleGamemode(sender, args, GameMode.CREATIVE, "Creative");
-            case "gms":
-                return handleGamemode(sender, args, GameMode.SURVIVAL, "Survival");
-            case "gmsp":
-                return handleGamemode(sender, args, GameMode.SPECTATOR, "Spectator");
-            case "gma":
-                return handleGamemode(sender, args, GameMode.ADVENTURE, "Adventure");
-            case "fly":
-                return handleFly(sender, args);
-            case "speed":
-                return handleSpeed(sender, args);
-            case "invincible":
-                return handleInvincible(sender, args);
-            case "tphere":
-                return handleTpHere((Player) sender, args);
-            case "tpall":
-                return handleTpAll(sender, args);
-            case "invsee":
-                return handleInvsee((Player) sender, args);
-            case "enchant":
-                return handleEnchant((Player) sender, args);
-            case "sendserver":
-                return handleSendServer(sender, args);
-            case "heal":
-                return handleHeal(sender, args);
-            case "feed":
-                return handleFeed(sender, args);
-            case "repair":
-                return handleRepair((Player) sender, args);
+            case "gmc": return handleGamemode(sender, args, GameMode.CREATIVE, "Creative");
+            case "gms": return handleGamemode(sender, args, GameMode.SURVIVAL, "Survival");
+            case "gmsp": return handleGamemode(sender, args, GameMode.SPECTATOR, "Spectator");
+            case "gma": return handleGamemode(sender, args, GameMode.ADVENTURE, "Adventure");
+            case "fly": return handleFly(sender, args);
+            case "speed": return handleSpeed(sender, args);
+            case "invincible": return handleInvincible(sender, args);
+            case "tphere": return handleTpHere((Player) sender, args);
+            case "tpall": return handleTpAll(sender, args);
+            case "invsee": return handleInvsee((Player) sender, args);
+            case "enchant": return handleEnchant((Player) sender, args);
+            case "sendserver": return handleSendServer(sender, args);
+            case "heal": return handleHeal(sender, args);
+            case "feed": return handleFeed(sender, args);
+            case "repair": return handleRepair((Player) sender, args);
             case "struck":
-            case "strike":
-                return handleStruck(sender, args);
-            case "sudo":
-                return handleSudo(sender, args);
-            case "give":
-                return handleGive(sender, args);
-            case "effect":
-                return handleEffect(sender, args);
+            case "strike": return handleStruck(sender, args);
+            case "sudo": return handleSudo(sender, args);
+            case "give": return handleGive(sender, args);
+            case "effect": return handleEffect(sender, args);
             case "cleargrounditems":
             case "cleargrouditems":
             case "clearitems":
-            case "clearlag":
-                return handleClearGroundItems(sender);
+            case "clearlag": return handleClearGroundItems(sender);
             case "clear":
             case "ci":
-            case "clearinventory":
-                return handleClear(sender, args);
-            case "setspawn":
-                return handleSetSpawn((Player) sender);
-            case "spawn":
-                return handleSpawn(sender, args);
-            case "setwarp":
-                return handleSetWarp((Player) sender, args);
-            case "delwarp":
-                return handleDelWarp(sender, args);
-            case "warp":
-                return handleWarp(sender, args);
-            case "sethome":
-                return handleSetHome((Player) sender, args);
-            case "delhome":
-                return handleDelHome((Player) sender, args);
-            case "home":
-                return handleHome((Player) sender, args);
-            default:
-                return false;
+            case "clearinventory": return handleClear(sender, args);
+            case "setspawn": return handleSetSpawn((Player) sender);
+            case "spawn": return handleSpawn(sender, args);
+            case "setwarp": return handleSetWarp((Player) sender, args);
+            case "delwarp": return handleDelWarp(sender, args);
+            case "warp": return handleWarp(sender, args);
+            case "sethome": return handleSetHome((Player) sender, args);
+            case "delhome": return handleDelHome((Player) sender, args);
+            case "home": return handleHome((Player) sender, args);
+            default: return false;
         }
     }
-
-    // =========================================================================
-    //                     SPAWN, WARP & HOME COMMAND HANDLERS
-    // =========================================================================
 
     private boolean handleSetSpawn(Player player) {
         Location loc = player.getLocation().clone();
@@ -464,7 +486,6 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        // Optional: /spawn <player|*> for staff
         if (args.length > 0 && (sender.hasPermission("staffcore.command.spawn.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
             if (args[0].equals("*")) {
                 int count = 0;
@@ -514,6 +535,9 @@ public class UtilityCommands implements CommandExecutor {
         }
         String warpName = args[0].toLowerCase();
         warps.put(warpName, player.getLocation().clone());
+        if (!warpIcons.containsKey(warpName)) {
+            warpIcons.put(warpName, "end");
+        }
         saveStates(plugin);
         player.sendMessage(plugin.getMessageManager().color(
                 plugin.getConfig().getString("messages.setwarp-success", "&aSuccessfully set warp &e%warp% &aat your current location.")
@@ -528,6 +552,7 @@ public class UtilityCommands implements CommandExecutor {
         }
         String warpName = args[0].toLowerCase();
         if (warps.remove(warpName) != null) {
+            warpIcons.remove(warpName);
             saveStates(plugin);
             sender.sendMessage(plugin.getMessageManager().color(
                     plugin.getConfig().getString("messages.delwarp-success", "&aSuccessfully deleted warp &e%warp%&a.")
@@ -541,7 +566,12 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     private boolean handleWarp(CommandSender sender, String[] args) {
+        // If run by player without args, open the interactive GUI!
         if (args.length < 1) {
+            if (sender instanceof Player) {
+                TeleportGui.openWarpGui(plugin, (Player) sender, 1);
+                return true;
+            }
             if (warps.isEmpty()) {
                 sender.sendMessage(plugin.getMessageManager().color("&cNo warps have been set yet! Usage: /warp <warp_name>"));
             } else {
@@ -560,7 +590,6 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        // Optional: /warp <warp_name> <player|*> for staff
         if (args.length >= 2 && (sender.hasPermission("staffcore.command.warp.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
             if (args[1].equals("*")) {
                 int count = 0;
@@ -621,6 +650,9 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         homes.put(homeName, player.getLocation().clone());
+        if (getHomeIcon(uuid, homeName).equals("home")) {
+            setHomeIcon(uuid, homeName, "home");
+        }
         saveStates(plugin);
         player.sendMessage(plugin.getMessageManager().color(
                 plugin.getConfig().getString("messages.sethome-success", "&aSuccessfully set home &e%home% &aat your current location.")
@@ -636,6 +668,8 @@ public class UtilityCommands implements CommandExecutor {
         String homeName = args[0].toLowerCase();
         Map<String, Location> homes = playerHomes.get(player.getUniqueId());
         if (homes != null && homes.remove(homeName) != null) {
+            Map<String, String> iconMap = playerHomeIcons.get(player.getUniqueId());
+            if (iconMap != null) iconMap.remove(homeName);
             saveStates(plugin);
             player.sendMessage(plugin.getMessageManager().color(
                     plugin.getConfig().getString("messages.delhome-success", "&aSuccessfully deleted home &e%home%&a.")
@@ -650,31 +684,25 @@ public class UtilityCommands implements CommandExecutor {
 
     private boolean handleHome(Player player, String[] args) {
         Map<String, Location> homes = playerHomes.get(player.getUniqueId());
-        if (homes == null || homes.isEmpty()) {
-            player.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("messages.no-homes-set", "&cYou do not have any homes set! Use &e/sethome <name> &cfirst.")));
+
+        // When run without args, open interactive Homes GUI!
+        if (args.length < 1) {
+            TeleportGui.openHomeGui(plugin, player);
             return true;
         }
 
-        String homeName;
-        if (args.length < 1) {
-            if (homes.containsKey("home")) {
-                homeName = "home";
-            } else if (homes.size() == 1) {
-                homeName = homes.keySet().iterator().next();
-            } else {
-                player.sendMessage(plugin.getMessageManager().color(
-                        "&aYour homes (&e" + homes.size() + "&a): &f" + String.join("&7, &f", homes.keySet()) + " &7(Use &e/home <name>&7)"));
-                return true;
-            }
-        } else {
-            homeName = args[0].toLowerCase();
+        String homeName = args[0].toLowerCase();
+        if (homes == null || !homes.containsKey(homeName)) {
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.home-not-found", "&cHome &e%home% &cwas not found!")
+                            .replace("%home%", homeName)));
+            return true;
         }
 
         Location loc = homes.get(homeName);
         if (loc == null || loc.getWorld() == null) {
             player.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("messages.home-not-found", "&cHome &e%home% &cwas not found! Available homes: &f" + String.join(", ", homes.keySet()))
+                    plugin.getConfig().getString("messages.home-not-found", "&cHome &e%home% &cwas not found!")
                             .replace("%home%", homeName)));
             return true;
         }
@@ -685,10 +713,6 @@ public class UtilityCommands implements CommandExecutor {
                         .replace("%home%", homeName)));
         return true;
     }
-
-    // =========================================================================
-    //                        STAFF UTILITY HANDLERS
-    // =========================================================================
 
     private boolean handleGamemode(CommandSender sender, String[] args, GameMode mode, String modeName) {
         if (args.length > 0) {
@@ -1386,10 +1410,6 @@ public class UtilityCommands implements CommandExecutor {
         return true;
     }
 
-    /**
-     * Resolves ALL materials across 1.8.8 - 1.21+, including Netherite items, Tridents, Maces, etc.,
-     * bypassing Spigot's legacy Commodore bytecode filter via dynamic Class.forName reflection.
-     */
     public static Material[] getAllRuntimeMaterials() {
         try {
             Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
@@ -1401,9 +1421,6 @@ public class UtilityCommands implements CommandExecutor {
         return Material.values();
     }
 
-    /**
-     * Returns a cached, sorted list of all giveable item names across 1.8.8 - 1.21+ for fast /give tab completion.
-     */
     public static List<String> getAllGiveableItemNames() {
         if (cachedGiveableItemNames != null && !cachedGiveableItemNames.isEmpty()) {
             return cachedGiveableItemNames;
@@ -1432,7 +1449,6 @@ public class UtilityCommands implements CommandExecutor {
             names.add(rawName.toLowerCase());
         }
 
-        // Useful shorthand aliases
         names.addAll(Arrays.asList(
                 "gapple", "egap", "notch_apple", "totem", "pearl", "xpbottle", "cmdblock", "steak"
         ));
@@ -1448,7 +1464,6 @@ public class UtilityCommands implements CommandExecutor {
             clean = clean.replace("NETHERRITE", "NETHERITE");
         }
 
-        // 1. Try Spigot 1.13+ non-legacy matchMaterial(name, false) via dynamic reflection
         try {
             Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
             Method matchModern = matClass.getMethod("matchMaterial", String.class, boolean.class);
@@ -1456,7 +1471,6 @@ public class UtilityCommands implements CommandExecutor {
             if (m != null) return m;
         } catch (Throwable ignored) {}
 
-        // 2. Try Spigot 1.13+ getMaterial(name, false) via dynamic reflection
         try {
             Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
             Method getModern = matClass.getMethod("getMaterial", String.class, boolean.class);
@@ -1464,7 +1478,6 @@ public class UtilityCommands implements CommandExecutor {
             if (m != null) return m;
         } catch (Throwable ignored) {}
 
-        // 3. Scan actual runtime enum constants directly using ((Enum<?>) m).name() (bypasses Commodore)
         Material[] allMaterials = getAllRuntimeMaterials();
         for (Material m : allMaterials) {
             String rawName = ((Enum<?>) m).name();
@@ -1474,7 +1487,6 @@ public class UtilityCommands implements CommandExecutor {
             }
         }
 
-        // 4. Shorthand aliases
         String compact = clean.toLowerCase().replace("_", "");
         switch (compact) {
             case "gap":
@@ -1500,41 +1512,26 @@ public class UtilityCommands implements CommandExecutor {
                 return findRuntimeMaterial("COMMAND_BLOCK", "COMMAND");
             case "steak":
                 return Material.COOKED_BEEF;
-            case "netheritesword":
-                return findRuntimeMaterial("NETHERITE_SWORD", null);
+            case "netheritesword": return findRuntimeMaterial("NETHERITE_SWORD", null);
             case "netheritepick":
-            case "netheritepickaxe":
-                return findRuntimeMaterial("NETHERITE_PICKAXE", null);
-            case "netheriteaxe":
-                return findRuntimeMaterial("NETHERITE_AXE", null);
-            case "netheriteshovel":
-                return findRuntimeMaterial("NETHERITE_SHOVEL", null);
-            case "netheritehoe":
-                return findRuntimeMaterial("NETHERITE_HOE", null);
-            case "netheritehelmet":
-                return findRuntimeMaterial("NETHERITE_HELMET", null);
+            case "netheritepickaxe": return findRuntimeMaterial("NETHERITE_PICKAXE", null);
+            case "netheriteaxe": return findRuntimeMaterial("NETHERITE_AXE", null);
+            case "netheriteshovel": return findRuntimeMaterial("NETHERITE_SHOVEL", null);
+            case "netheritehoe": return findRuntimeMaterial("NETHERITE_HOE", null);
+            case "netheritehelmet": return findRuntimeMaterial("NETHERITE_HELMET", null);
             case "netheritechestplate":
-            case "netheritechest":
-                return findRuntimeMaterial("NETHERITE_CHESTPLATE", null);
+            case "netheritechest": return findRuntimeMaterial("NETHERITE_CHESTPLATE", null);
             case "netheriteleggings":
-            case "netheritelegs":
-                return findRuntimeMaterial("NETHERITE_LEGGINGS", null);
-            case "netheriteboots":
-                return findRuntimeMaterial("NETHERITE_BOOTS", null);
-            case "netheriteingot":
-                return findRuntimeMaterial("NETHERITE_INGOT", null);
-            case "netheritescrap":
-                return findRuntimeMaterial("NETHERITE_SCRAP", null);
-            case "netheriteblock":
-                return findRuntimeMaterial("NETHERITE_BLOCK", null);
+            case "netheritelegs": return findRuntimeMaterial("NETHERITE_LEGGINGS", null);
+            case "netheriteboots": return findRuntimeMaterial("NETHERITE_BOOTS", null);
+            case "netheriteingot": return findRuntimeMaterial("NETHERITE_INGOT", null);
+            case "netheritescrap": return findRuntimeMaterial("NETHERITE_SCRAP", null);
+            case "netheriteblock": return findRuntimeMaterial("NETHERITE_BLOCK", null);
             case "ancientdebris":
-            case "debris":
-                return findRuntimeMaterial("ANCIENT_DEBRIS", null);
-            default:
-                break;
+            case "debris": return findRuntimeMaterial("ANCIENT_DEBRIS", null);
+            default: break;
         }
 
-        // 5. Direct matchMaterial / valueOf fallback
         Material direct = Material.matchMaterial(clean);
         if (direct != null) return direct;
 
@@ -1542,20 +1539,15 @@ public class UtilityCommands implements CommandExecutor {
             return Material.valueOf(clean);
         } catch (IllegalArgumentException ignored) {}
 
-        // 6. Fuzzy match against all non-legacy runtime enum constants
         for (Material m : allMaterials) {
             String rawName = ((Enum<?>) m).name();
             if (rawName.startsWith("LEGACY_")) continue;
-            if (rawName.replace("_", "").equalsIgnoreCase(compact)) {
-                return m;
-            }
+            if (rawName.replace("_", "").equalsIgnoreCase(compact)) return m;
         }
         for (Material m : allMaterials) {
             String rawName = ((Enum<?>) m).name();
             if (rawName.startsWith("LEGACY_")) continue;
-            if (rawName.toLowerCase().startsWith(clean.toLowerCase())) {
-                return m;
-            }
+            if (rawName.toLowerCase().startsWith(clean.toLowerCase())) return m;
         }
         return null;
     }
@@ -1563,16 +1555,12 @@ public class UtilityCommands implements CommandExecutor {
     private static Material findRuntimeMaterial(String primary, String fallback) {
         for (Material m : getAllRuntimeMaterials()) {
             String rawName = ((Enum<?>) m).name();
-            if (primary != null && rawName.equalsIgnoreCase(primary)) {
-                return m;
-            }
+            if (primary != null && rawName.equalsIgnoreCase(primary)) return m;
         }
         if (fallback != null) {
             for (Material m : getAllRuntimeMaterials()) {
                 String rawName = ((Enum<?>) m).name();
-                if (rawName.equalsIgnoreCase(fallback)) {
-                    return m;
-                }
+                if (rawName.equalsIgnoreCase(fallback)) return m;
             }
         }
         return null;
@@ -1649,9 +1637,7 @@ public class UtilityCommands implements CommandExecutor {
             int count = 0;
             for (Player target : Bukkit.getOnlinePlayers()) {
                 target.removePotionEffect(type);
-                if (seconds > 0) {
-                    target.addPotionEffect(new PotionEffect(type, ticks, amplifier));
-                }
+                if (seconds > 0) target.addPotionEffect(new PotionEffect(type, ticks, amplifier));
                 count++;
             }
             if (seconds == 0) {
