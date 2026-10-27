@@ -1,4 +1,4 @@
-# 🛡️ StaffCore (v1.2.3)
+# 🛡️ StaffCore (v1.2.4)
 
 **StaffCore** is a lightweight, all-in-one **Minecraft Moderation, Staff Utility, and Server Essentials Suite** built for **Spigot, Paper, and Purpur (`1.8.8` – `26.3`)**. It combines a complete punishment engine, interactive inspection GUIs, staff vanish/freeze tools, and essential player teleportation (`Spawn`, `Warps`, `Homes`) in a single zero-dependency plugin.
 
