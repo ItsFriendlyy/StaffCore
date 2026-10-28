@@ -114,8 +114,22 @@ public class GuiListener implements Listener {
             Player player = (Player) event.getWhoClicked();
             int rawSlot = event.getRawSlot();
 
+            // Slot 49: Close
             if (rawSlot == 49) {
                 player.closeInventory();
+                return;
+            }
+
+            // Slot 51: Mode Switcher (Bedrock / Sub-Menu Mode toggle)
+            if (rawSlot == 51) {
+                TeleportGui.toggleBedrockMode(player.getUniqueId());
+                boolean nowBedrock = TeleportGui.isBedrockMode(player.getUniqueId());
+                if (nowBedrock) {
+                    player.sendMessage(core.getMessageManager().color("&6[StaffCore] &aSwitched to &eSub-Menu Mode &7(Touch & Bedrock friendly)!"));
+                } else {
+                    player.sendMessage(core.getMessageManager().color("&6[StaffCore] &aSwitched to &bDirect Java Mode &7(Left-click instant teleport)!"));
+                }
+                TeleportGui.openHomeGui(core, player);
                 return;
             }
 
@@ -132,7 +146,7 @@ public class GuiListener implements Listener {
 
             ClickType click = event.getClick();
 
-            // Shift + Right-Click: Delete Home
+            // Java Shortcut: Shift + Right-Click -> Delete Home
             if (click == ClickType.SHIFT_RIGHT) {
                 homes.remove(homeDisplayName);
                 Map<String, String> icons = UtilityCommands.playerHomeIcons.get(player.getUniqueId());
@@ -145,7 +159,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Shift + Left-Click: Rename Home via chat prompt
+            // Java Shortcut: Shift + Left-Click -> Rename Home via chat prompt
             if (click == ClickType.SHIFT_LEFT) {
                 player.closeInventory();
                 TeleportGui.renamingHomeMap.put(player.getUniqueId(), homeDisplayName);
@@ -154,13 +168,20 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Right-Click: Open Icon Picker
+            // Java Shortcut: Right-Click -> Open Icon Picker directly
             if (event.isRightClick()) {
                 TeleportGui.openHomeIconPicker(core, player, homeDisplayName);
                 return;
             }
 
-            // Left-Click: Teleport to Home
+            // Standard Left-Click / Bedrock single tap
+            if (TeleportGui.isBedrockMode(player.getUniqueId())) {
+                // Open touch-friendly action sub-menu for Bedrock players
+                TeleportGui.openHomeActionsMenu(core, player, homeDisplayName);
+                return;
+            }
+
+            // Direct Java Mode Left-Click: Instant Teleport
             Location loc = homes.get(homeDisplayName);
             if (loc != null && loc.getWorld() != null) {
                 player.closeInventory();
@@ -176,7 +197,72 @@ public class GuiListener implements Listener {
             return;
         }
 
-        // 4. Home Icon Picker GUI
+        // 4. Bedrock / Touch Home Actions Sub-Menu ("Manage: <home_name>")
+        if (title.startsWith(TeleportGui.HOME_ACTIONS_PREFIX)) {
+            event.setCancelled(true);
+            if (!(event.getWhoClicked() instanceof Player)) return;
+
+            Player player = (Player) event.getWhoClicked();
+            String homeName = ChatColor.stripColor(title.substring(TeleportGui.HOME_ACTIONS_PREFIX.length())).trim().toLowerCase();
+            Map<String, Location> homes = UtilityCommands.playerHomes.get(player.getUniqueId());
+            int rawSlot = event.getRawSlot();
+
+            // Slot 22: Back button
+            if (rawSlot == 22) {
+                TeleportGui.openHomeGui(core, player);
+                return;
+            }
+
+            if (homes == null || !homes.containsKey(homeName)) {
+                player.sendMessage(core.getMessageManager().color("&cHome &e" + homeName + " &cwas not found!"));
+                TeleportGui.openHomeGui(core, player);
+                return;
+            }
+
+            // Slot 10: 🟢 Teleport Button
+            if (rawSlot == 10) {
+                Location loc = homes.get(homeName);
+                if (loc != null && loc.getWorld() != null) {
+                    player.closeInventory();
+                    player.teleport(loc);
+                    player.sendMessage(core.getMessageManager().color(
+                            core.getConfig().getString("messages.home-teleported", "&aTeleported to home &e%home%&a.")
+                                    .replace("%home%", homeName)));
+                }
+                return;
+            }
+
+            // Slot 12: 🎨 Change Icon Button
+            if (rawSlot == 12) {
+                TeleportGui.openHomeIconPicker(core, player, homeName);
+                return;
+            }
+
+            // Slot 14: 🏷️ Rename Button
+            if (rawSlot == 14) {
+                player.closeInventory();
+                TeleportGui.renamingHomeMap.put(player.getUniqueId(), homeName);
+                player.sendMessage(core.getMessageManager().color(
+                        "&e&l[HOMES] &aPlease type the new name for home &6" + homeName + " &ain chat &7(or type &ccancel&7):"));
+                return;
+            }
+
+            // Slot 16: 🔴 Delete Button
+            if (rawSlot == 16) {
+                homes.remove(homeName);
+                Map<String, String> icons = UtilityCommands.playerHomeIcons.get(player.getUniqueId());
+                if (icons != null) icons.remove(homeName);
+                UtilityCommands.saveStates(core);
+                player.sendMessage(core.getMessageManager().color(
+                        core.getConfig().getString("messages.delhome-success", "&aSuccessfully deleted home &e%home%&a.")
+                                .replace("%home%", homeName)));
+                TeleportGui.openHomeGui(core, player);
+                return;
+            }
+            return;
+        }
+
+        // 5. Home Icon Picker GUI
         if (title.startsWith(TeleportGui.HOME_ICON_PICKER_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -186,7 +272,11 @@ public class GuiListener implements Listener {
             int rawSlot = event.getRawSlot();
 
             if (rawSlot == 22) {
-                TeleportGui.openHomeGui(core, player);
+                if (TeleportGui.isBedrockMode(player.getUniqueId())) {
+                    TeleportGui.openHomeActionsMenu(core, player, homeName);
+                } else {
+                    TeleportGui.openHomeGui(core, player);
+                }
                 return;
             }
 
@@ -196,12 +286,17 @@ public class GuiListener implements Listener {
                 UtilityCommands.saveStates(core);
                 player.sendMessage(core.getMessageManager().color(
                         "&aSelected icon " + choice.displayName + " &afor home &e" + homeName + "&a!"));
-                TeleportGui.openHomeGui(core, player);
+
+                if (TeleportGui.isBedrockMode(player.getUniqueId())) {
+                    TeleportGui.openHomeActionsMenu(core, player, homeName);
+                } else {
+                    TeleportGui.openHomeGui(core, player);
+                }
             }
             return;
         }
 
-        // 5. Interactive Warps Explorer GUI (/warp)
+        // 6. Interactive Warps Explorer GUI (/warp)
         if (title.startsWith(TeleportGui.WARP_GUI_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -227,7 +322,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 51: Name Tag / Staff Rename shortcut
+            // Slot 51: Info Book / Staff rename hint
             if (rawSlot == 51 && (player.hasPermission("staffcore.command.setwarp") || player.isOp())) {
                 player.closeInventory();
                 player.sendMessage(core.getMessageManager().color(
@@ -281,7 +376,7 @@ public class GuiListener implements Listener {
             return;
         }
 
-        // 6. Warp Icon Picker GUI
+        // 7. Warp Icon Picker GUI
         if (title.startsWith(TeleportGui.WARP_ICON_PICKER_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -307,7 +402,7 @@ public class GuiListener implements Listener {
     }
 
     /**
-     * Handles chat input for home renaming when clicking Shift+Left-Click in /home.
+     * Handles chat input for home renaming when clicking the Name Tag / Shift-Click in /home.
      */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onChat(AsyncPlayerChatEvent event) {
@@ -336,6 +431,7 @@ public class GuiListener implements Listener {
                 Location loc = homes.remove(oldName);
                 homes.put(newName, loc);
 
+                // Transfer customized icon
                 String icon = UtilityCommands.getHomeIcon(uuid, oldName);
                 UtilityCommands.setHomeIcon(uuid, newName, icon);
                 Map<String, String> icons = UtilityCommands.playerHomeIcons.get(uuid);

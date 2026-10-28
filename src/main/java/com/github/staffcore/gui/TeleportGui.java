@@ -15,16 +15,30 @@ import java.util.*;
 
 public class TeleportGui {
 
-    public static final String HOME_GUI_PREFIX = ChatColor.DARK_GRAY + "Homes: " + ChatColor.DARK_AQUA;
-    public static final String HOME_ICON_PICKER_PREFIX = ChatColor.DARK_GRAY + "Pick Icon: " + ChatColor.DARK_AQUA;
+    public static final String HOME_GUI_PREFIX = ChatColor.DARK_GRAY + "Homes: " + ChatColor.BLUE;
+    public static final String HOME_ICON_PICKER_PREFIX = ChatColor.DARK_GRAY + "Pick Icon: " + ChatColor.GOLD;
+    public static final String HOME_ACTIONS_PREFIX = ChatColor.DARK_GRAY + "Manage: " + ChatColor.GOLD;
     public static final String WARP_GUI_PREFIX = ChatColor.DARK_GRAY + "Warps - Page ";
     public static final String WARP_ICON_PICKER_PREFIX = ChatColor.DARK_GRAY + "Warp Icon: " + ChatColor.GOLD;
 
-    // Chat prompt listeners: Player UUID -> Target editing home/warp name
+    // Track active renaming sessions: player UUID -> old home name
     public static final Map<UUID, String> renamingHomeMap = new HashMap<>();
-    public static final Map<UUID, String> renamingWarpMap = new HashMap<>();
 
-    // Available customizable icons for homes & warps
+    // Track players who prefer Bedrock / Touch Sub-Menu Mode (UUID set)
+    public static final Set<UUID> bedrockModePlayers = new HashSet<>();
+
+    public static boolean isBedrockMode(UUID uuid) {
+        return bedrockModePlayers.contains(uuid);
+    }
+
+    public static void toggleBedrockMode(UUID uuid) {
+        if (bedrockModePlayers.contains(uuid)) {
+            bedrockModePlayers.remove(uuid);
+        } else {
+            bedrockModePlayers.add(uuid);
+        }
+    }
+
     public static class IconChoice {
         public final String id;
         public final String displayName;
@@ -40,302 +54,387 @@ public class TeleportGui {
             this.legacyData = legacyData;
         }
 
-        public ItemStack createStack() {
-            ItemStack stack;
+        public ItemStack toItemStack() {
+            ItemStack item;
             try {
-                stack = new ItemStack(Material.valueOf(modernMat));
+                Material mat = Material.valueOf(modernMat);
+                item = new ItemStack(mat);
             } catch (Throwable t) {
-                stack = new ItemStack(Material.valueOf(legacyMat), 1, legacyData);
+                try {
+                    Material mat = Material.valueOf(legacyMat);
+                    item = new ItemStack(mat, 1, legacyData);
+                } catch (Throwable t2) {
+                    item = new ItemStack(Material.PAPER);
+                }
             }
-            return stack;
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName(displayName);
+                item.setItemMeta(meta);
+            }
+            return item;
         }
     }
 
     public static final List<IconChoice> ICON_CHOICES = Arrays.asList(
-            new IconChoice("home", "&b&lMain Home", "RED_BED", "BED", (short) 0),
-            new IconChoice("base", "&6&lFortress / Base", "BRICKS", "BRICK", (short) 0),
-            new IconChoice("farm", "&a&lCrop / Animal Farm", "WHEAT", "WHEAT", (short) 0),
-            new IconChoice("mob", "&c&lMob Grinder / Spawner", "ROTTEN_FLESH", "ROTTEN_FLESH", (short) 0),
-            new IconChoice("mine", "&7&lMining Quarry / Cave", "IRON_PICKAXE", "IRON_PICKAXE", (short) 0),
-            new IconChoice("shop", "&e&lMarket / Shop", "EMERALD", "EMERALD", (short) 0),
-            new IconChoice("nether", "&4&lNether Portal Base", "NETHERRACK", "NETHERRACK", (short) 0),
-            new IconChoice("end", "&d&lThe End Base", "ENDER_EYE", "EYE_OF_ENDER", (short) 0),
-            new IconChoice("chest", "&6&lStorage / Vault", "CHEST", "CHEST", (short) 0),
-            new IconChoice("anvil", "&8&lForge / Blacksmith", "ANVIL", "ANVIL", (short) 0),
-            new IconChoice("enchant", "&5&lEnchanting Library", "ENCHANTING_TABLE", "ENCHANTMENT_TABLE", (short) 0),
-            new IconChoice("pvp", "&c&lPvP / Combat Arena", "DIAMOND_SWORD", "DIAMOND_SWORD", (short) 0),
-            new IconChoice("dock", "&9&lHarbor / Fishing Dock", "FISHING_ROD", "FISHING_ROD", (short) 0),
-            new IconChoice("tree", "&2&lWood / Tree Farm", "OAK_LOG", "LOG", (short) 0)
+            new IconChoice("home", ChatColor.GREEN + "Cozy Cottage / Home", "RED_BED", "BED", (short) 0),
+            new IconChoice("base", ChatColor.GRAY + "Fortress / Main Base", "STONE_BRICKS", "SMOOTH_BRICK", (short) 0),
+            new IconChoice("farm", ChatColor.YELLOW + "Crop Farm / Barn", "WHEAT", "WHEAT", (short) 0),
+            new IconChoice("spawner", ChatColor.DARK_PURPLE + "Mob Spawner / XP Grinder", "SPAWNER", "MOB_SPAWNER", (short) 0),
+            new IconChoice("mine", ChatColor.GOLD + "Mining Quarry / Cave", "IRON_PICKAXE", "IRON_PICKAXE", (short) 0),
+            new IconChoice("shop", ChatColor.AQUA + "Market / Player Shop", "OAK_SIGN", "SIGN", (short) 0),
+            new IconChoice("nether", ChatColor.DARK_RED + "Nether Hub / Portal", "NETHERRACK", "NETHERRACK", (short) 0),
+            new IconChoice("end", ChatColor.LIGHT_PURPLE + "End Base / Stronghold", "ENDER_EYE", "EYE_OF_ENDER", (short) 0),
+            new IconChoice("vault", ChatColor.GOLD + "Storage Vault / Bank", "CHEST", "CHEST", (short) 0),
+            new IconChoice("forge", ChatColor.DARK_GRAY + "Blacksmith / Forge", "ANVIL", "ANVIL", (short) 0),
+            new IconChoice("library", ChatColor.BLUE + "Enchanting Library", "ENCHANTING_TABLE", "ENCHANTMENT_TABLE", (short) 0),
+            new IconChoice("arena", ChatColor.RED + "PvP Arena / Colosseum", "DIAMOND_SWORD", "DIAMOND_SWORD", (short) 0),
+            new IconChoice("dock", ChatColor.DARK_AQUA + "Fishing Pier / Port", "FISHING_ROD", "FISHING_ROD", (short) 0),
+            new IconChoice("wood", ChatColor.DARK_GREEN + "Lumber Mill / Forest", "OAK_LOG", "LOG", (short) 0)
     );
 
-    // =========================================================================
-    //                            HOME GUI
-    // =========================================================================
+    public static IconChoice getIconChoice(String iconId) {
+        if (iconId == null) return ICON_CHOICES.get(0);
+        for (IconChoice choice : ICON_CHOICES) {
+            if (choice.id.equalsIgnoreCase(iconId)) {
+                return choice;
+            }
+        }
+        return ICON_CHOICES.get(0);
+    }
 
+    /**
+     * Opens the Main Homes GUI (54 slots).
+     */
     public static void openHomeGui(StaffCore plugin, Player player) {
         UUID uuid = player.getUniqueId();
         Map<String, Location> homes = UtilityCommands.playerHomes.get(uuid);
-        int totalHomes = (homes != null) ? homes.size() : 0;
+        if (homes == null) homes = Collections.emptyMap();
 
-        Inventory inv = Bukkit.createInventory(null, 54, HOME_GUI_PREFIX + player.getName());
-        ItemStack filler = createPane("GRAY_STAINED_GLASS_PANE", "STAINED_GLASS_PANE", (short) 7, " ");
+        Inventory gui = Bukkit.createInventory(null, 54, HOME_GUI_PREFIX + player.getName());
+        ItemStack filler = createGrayPane();
+
+        // Fill bottom control row (slots 45-53)
         for (int i = 45; i < 54; i++) {
-            inv.setItem(i, filler);
+            gui.setItem(i, filler);
         }
 
-        if (homes != null && !homes.isEmpty()) {
-            int slot = 0;
-            for (Map.Entry<String, Location> entry : homes.entrySet()) {
-                if (slot >= 45) break;
-                String homeName = entry.getKey();
-                Location loc = entry.getValue();
-
-                ItemStack icon = resolveHomeIcon(plugin, uuid, homeName);
-                ItemMeta meta = icon.getItemMeta();
-                if (meta != null) {
-                    meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', "&a&l" + homeName.toUpperCase()));
-                    List<String> lore = new ArrayList<>();
-                    lore.add(ChatColor.GRAY + "World: " + ChatColor.WHITE + (loc.getWorld() != null ? loc.getWorld().getName() : "Unknown"));
-                    lore.add(ChatColor.GRAY + "X: " + ChatColor.YELLOW + loc.getBlockX() +
-                            ChatColor.GRAY + " Y: " + ChatColor.YELLOW + loc.getBlockY() +
-                            ChatColor.GRAY + " Z: " + ChatColor.YELLOW + loc.getBlockZ());
-                    lore.add("");
-                    lore.add(ChatColor.YELLOW + "Left-Click » " + ChatColor.GREEN + "Teleport to home");
-                    lore.add(ChatColor.GOLD + "Right-Click » " + ChatColor.AQUA + "Customize icon");
-                    lore.add(ChatColor.AQUA + "Shift + Left-Click » " + ChatColor.WHITE + "Rename home");
-                    lore.add(ChatColor.RED + "Shift + Right-Click » " + ChatColor.RED + "Delete home");
-                    meta.setLore(lore);
-                    icon.setItemMeta(meta);
-                }
-                inv.setItem(slot++, icon);
-            }
-        } else {
-            inv.setItem(22, createItem(Material.BARRIER, "&c&lNo Homes Set",
-                    Arrays.asList("&7You haven't set any homes yet!", "&7Set one using &e/sethome <name>")));
-        }
-
-        // Slot 45: Stats info book
+        // Slot 45: Information Book
         int maxHomes = plugin.getConfig().getInt("homes.max-homes", 5);
         String limitStr = (player.hasPermission("staffcore.command.sethome.unlimited") || player.isOp()) ? "Unlimited" : String.valueOf(maxHomes);
-        inv.setItem(45, createItem(matchMaterial("BOOK", "BOOK"), "&e&lYour Homes Overview",
+        gui.setItem(45, createItem(Material.BOOK, ChatColor.GOLD + "" + ChatColor.BOLD + "Home Overview",
                 Arrays.asList(
-                        "&7Homes Used: &a" + totalHomes + " &7/ &e" + limitStr,
-                        "&7Command: &f/sethome <name>",
-                        "",
-                        "&8Click any home above to teleport!"
+                        ChatColor.GRAY + "Your Homes: " + ChatColor.GREEN + homes.size() + ChatColor.GRAY + "/" + ChatColor.YELLOW + limitStr,
+                        ChatColor.GRAY + "Set a new home: " + ChatColor.WHITE + "/sethome <name>",
+                        ChatColor.GRAY + "Delete a home: " + ChatColor.WHITE + "/delhome <name>"
                 )));
 
-        // Slot 49: Close barrier
-        inv.setItem(49, createItem(Material.BARRIER, "&c&lClose", Collections.singletonList("&7Click to close this menu")));
+        // Slot 49: Close Button
+        gui.setItem(49, createItem(Material.BARRIER, ChatColor.RED + "" + ChatColor.BOLD + "Close",
+                Collections.singletonList(ChatColor.GRAY + "Click to close this menu")));
+
+        // Slot 51: Mode Switcher (Bedrock / Mobile Friendly Toggle)
+        boolean bedrockMode = isBedrockMode(uuid);
+        Material toggleMat = bedrockMode ? matchCrossVersionMaterial("REDSTONE_TORCH", "REDSTONE_TORCH_ON") : Material.LEVER;
+        String modeTitle = bedrockMode
+                ? ChatColor.GOLD + "" + ChatColor.BOLD + "Mode: " + ChatColor.YELLOW + "Sub-Menu (Bedrock)"
+                : ChatColor.GREEN + "" + ChatColor.BOLD + "Mode: " + ChatColor.AQUA + "Direct (Java)";
+
+        List<String> toggleLore = new ArrayList<>();
+        if (bedrockMode) {
+            toggleLore.add(ChatColor.GRAY + "Current setting: " + ChatColor.YELLOW + "Sub-Menu Mode");
+            toggleLore.add(ChatColor.WHITE + "• Single tap on any home opens a");
+            toggleLore.add(ChatColor.WHITE + "  simple touch menu with big buttons");
+            toggleLore.add(ChatColor.WHITE + "  for Teleport, Icon, Rename & Delete!");
+            toggleLore.add("");
+            toggleLore.add(ChatColor.YELLOW + "Tap to switch to " + ChatColor.AQUA + "Direct Java Mode" + ChatColor.YELLOW + ".");
+        } else {
+            toggleLore.add(ChatColor.GRAY + "Current setting: " + ChatColor.AQUA + "Direct Mode");
+            toggleLore.add(ChatColor.WHITE + "• Left-Click: Instant Teleport");
+            toggleLore.add(ChatColor.WHITE + "• Right-Click: Change Icon");
+            toggleLore.add(ChatColor.WHITE + "• Shift+Left: Rename");
+            toggleLore.add(ChatColor.WHITE + "• Shift+Right: Delete");
+            toggleLore.add("");
+            toggleLore.add(ChatColor.GOLD + "Bedrock / Mobile Players:");
+            toggleLore.add(ChatColor.YELLOW + "Click here to enable " + ChatColor.GOLD + "Sub-Menu Mode" + ChatColor.YELLOW + "!");
+        }
+        gui.setItem(51, createItem(toggleMat, modeTitle, toggleLore));
+
+        // Populate home items (slots 0 to 44)
+        int slot = 0;
+        for (Map.Entry<String, Location> entry : homes.entrySet()) {
+            if (slot >= 45) break;
+
+            String homeName = entry.getKey();
+            Location loc = entry.getValue();
+            String iconId = UtilityCommands.getHomeIcon(uuid, homeName);
+            IconChoice choice = getIconChoice(iconId);
+
+            ItemStack homeItem = choice.toItemStack();
+            ItemMeta meta = homeItem.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + homeName);
+                List<String> lore = new ArrayList<>();
+                lore.add(ChatColor.GRAY + "Theme: " + choice.displayName);
+                lore.add(ChatColor.GRAY + "World: " + ChatColor.WHITE + (loc.getWorld() != null ? loc.getWorld().getName() : "Unknown"));
+                lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ());
+                lore.add("");
+
+                if (bedrockMode) {
+                    lore.add(ChatColor.YELLOW + "» Tap to open Action Menu «");
+                    lore.add(ChatColor.DARK_GRAY + "(Teleport, Change Icon, Rename, Delete)");
+                } else {
+                    lore.add(ChatColor.GREEN + "• Left-Click: " + ChatColor.WHITE + "Teleport to home");
+                    lore.add(ChatColor.YELLOW + "• Right-Click: " + ChatColor.WHITE + "Change icon");
+                    lore.add(ChatColor.AQUA + "• Shift + Left-Click: " + ChatColor.WHITE + "Rename home");
+                    lore.add(ChatColor.RED + "• Shift + Right-Click: " + ChatColor.WHITE + "Delete home");
+                }
+
+                meta.setLore(lore);
+                homeItem.setItemMeta(meta);
+            }
+            gui.setItem(slot++, homeItem);
+        }
+
+        player.openInventory(gui);
+    }
+
+    /**
+     * Dedicated 27-slot Sub-Menu for Bedrock / Mobile players (1-tap dedicated buttons).
+     */
+    public static void openHomeActionsMenu(StaffCore plugin, Player player, String homeName) {
+        UUID uuid = player.getUniqueId();
+        Map<String, Location> homes = UtilityCommands.playerHomes.get(uuid);
+        if (homes == null || !homes.containsKey(homeName.toLowerCase())) {
+            player.sendMessage(plugin.getMessageManager().color("&cHome &e" + homeName + " &cwas not found!"));
+            openHomeGui(plugin, player);
+            return;
+        }
+
+        Location loc = homes.get(homeName.toLowerCase());
+        Inventory inv = Bukkit.createInventory(null, 27, HOME_ACTIONS_PREFIX + homeName);
+        ItemStack filler = createGrayPane();
+        for (int i = 0; i < 27; i++) {
+            inv.setItem(i, filler);
+        }
+
+        // Slot 4: Current Home Info & Icon
+        String iconId = UtilityCommands.getHomeIcon(uuid, homeName);
+        IconChoice choice = getIconChoice(iconId);
+        ItemStack currentHome = choice.toItemStack();
+        ItemMeta curMeta = currentHome.getItemMeta();
+        if (curMeta != null) {
+            curMeta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + homeName);
+            curMeta.setLore(Arrays.asList(
+                    ChatColor.GRAY + "Theme: " + choice.displayName,
+                    ChatColor.GRAY + "World: " + ChatColor.WHITE + (loc.getWorld() != null ? loc.getWorld().getName() : "Unknown"),
+                    ChatColor.GRAY + "Coordinates: " + ChatColor.WHITE + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
+            ));
+            currentHome.setItemMeta(curMeta);
+        }
+        inv.setItem(4, currentHome);
+
+        // Slot 10: 🟢 Teleport (Ender Pearl)
+        inv.setItem(10, createItem(Material.ENDER_PEARL, ChatColor.GREEN + "" + ChatColor.BOLD + "Teleport to Home",
+                Arrays.asList(
+                        ChatColor.GRAY + "Tap to teleport directly",
+                        ChatColor.GRAY + "to your home location."
+                )));
+
+        // Slot 12: 🎨 Change Icon (Painting / Item Frame)
+        Material iconMat = matchCrossVersionMaterial("ITEM_FRAME", "PAINTING");
+        inv.setItem(12, createItem(iconMat, ChatColor.YELLOW + "" + ChatColor.BOLD + "Change Icon",
+                Arrays.asList(
+                        ChatColor.GRAY + "Tap to pick from 14",
+                        ChatColor.GRAY + "creative themed icons."
+                )));
+
+        // Slot 14: 🏷️ Rename (Name Tag)
+        inv.setItem(14, createItem(Material.NAME_TAG, ChatColor.AQUA + "" + ChatColor.BOLD + "Rename Home",
+                Arrays.asList(
+                        ChatColor.GRAY + "Tap to type a new",
+                        ChatColor.GRAY + "name for this home in chat."
+                )));
+
+        // Slot 16: 🔴 Delete (Redstone Block)
+        inv.setItem(16, createItem(Material.REDSTONE_BLOCK, ChatColor.RED + "" + ChatColor.BOLD + "Delete Home",
+                Arrays.asList(
+                        ChatColor.GRAY + "Tap to permanently remove",
+                        ChatColor.GRAY + "this home from your list."
+                )));
+
+        // Slot 22: ⬅️ Back Arrow
+        inv.setItem(22, createItem(Material.ARROW, ChatColor.YELLOW + "" + ChatColor.BOLD + "Back to Homes",
+                Collections.singletonList(ChatColor.GRAY + "Click to return to your home list")));
 
         player.openInventory(inv);
     }
 
+    /**
+     * Opens the 14-Icon Picker Menu (27 slots).
+     */
     public static void openHomeIconPicker(StaffCore plugin, Player player, String homeName) {
         Inventory inv = Bukkit.createInventory(null, 27, HOME_ICON_PICKER_PREFIX + homeName);
-        ItemStack filler = createPane("GRAY_STAINED_GLASS_PANE", "STAINED_GLASS_PANE", (short) 7, " ");
+        ItemStack filler = createGrayPane();
         for (int i = 0; i < 27; i++) {
             inv.setItem(i, filler);
         }
 
-        int slot = 0;
-        for (IconChoice choice : ICON_CHOICES) {
-            if (slot >= 18) break;
-            ItemStack stack = choice.createStack();
-            ItemMeta meta = stack.getItemMeta();
+        for (int i = 0; i < ICON_CHOICES.size(); i++) {
+            IconChoice choice = ICON_CHOICES.get(i);
+            ItemStack item = choice.toItemStack();
+            ItemMeta meta = item.getItemMeta();
             if (meta != null) {
-                meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', choice.displayName));
+                meta.setDisplayName(choice.displayName);
                 meta.setLore(Arrays.asList(
-                        ChatColor.GRAY + "Theme: " + ChatColor.WHITE + choice.id,
-                        "",
-                        ChatColor.YELLOW + "Click to select this icon for &e" + homeName + "!"
+                        ChatColor.GRAY + "Click to choose this icon for " + ChatColor.GOLD + homeName,
+                        ChatColor.DARK_GRAY + "Theme: " + choice.displayName
                 ));
-                stack.setItemMeta(meta);
+                item.setItemMeta(meta);
             }
-            inv.setItem(slot++, stack);
+            inv.setItem(i, item);
         }
 
         // Slot 22: Back button
-        inv.setItem(22, createItem(Material.ARROW, "&e&lBack to Homes", Collections.singletonList("&7Click to return to your homes list")));
+        inv.setItem(22, createItem(Material.ARROW, ChatColor.YELLOW + "" + ChatColor.BOLD + "Back",
+                Collections.singletonList(ChatColor.GRAY + "Click to return to homes")));
+
         player.openInventory(inv);
     }
 
-    private static ItemStack resolveHomeIcon(StaffCore plugin, UUID uuid, String homeName) {
-        String iconKey = UtilityCommands.getHomeIcon(uuid, homeName);
-        if (iconKey != null) {
-            for (IconChoice choice : ICON_CHOICES) {
-                if (choice.id.equalsIgnoreCase(iconKey)) {
-                    return choice.createStack();
-                }
-            }
-        }
-        return ICON_CHOICES.get(0).createStack();
-    }
-
-    // =========================================================================
-    //                            WARP GUI
-    // =========================================================================
-
+    /**
+     * Opens the Server Warps Explorer GUI with Pagination (54 slots).
+     */
     public static void openWarpGui(StaffCore plugin, Player player, int page) {
-        List<String> warpNames = new ArrayList<>(UtilityCommands.warps.keySet());
+        Map<String, Location> warps = UtilityCommands.warps;
+        List<String> warpNames = new ArrayList<>(warps.keySet());
         Collections.sort(warpNames);
 
-        int totalWarps = warpNames.size();
-        int maxPages = Math.max(1, (int) Math.ceil((double) totalWarps / 36.0));
+        int warpsPerPage = 36;
+        int totalPages = Math.max(1, (int) Math.ceil((double) warpNames.size() / warpsPerPage));
         if (page < 1) page = 1;
-        if (page > maxPages) page = maxPages;
+        if (page > totalPages) page = totalPages;
 
-        Inventory inv = Bukkit.createInventory(null, 54, WARP_GUI_PREFIX + page + "/" + maxPages);
-        ItemStack filler = createPane("GRAY_STAINED_GLASS_PANE", "STAINED_GLASS_PANE", (short) 7, " ");
+        Inventory gui = Bukkit.createInventory(null, 54, WARP_GUI_PREFIX + page + "/" + totalPages);
+        ItemStack filler = createGrayPane();
+
         for (int i = 36; i < 54; i++) {
-            inv.setItem(i, filler);
+            gui.setItem(i, filler);
         }
 
-        int startIndex = (page - 1) * 36;
-        int endIndex = Math.min(startIndex + 36, totalWarps);
+        int startIndex = (page - 1) * warpsPerPage;
+        int endIndex = Math.min(startIndex + warpsPerPage, warpNames.size());
 
-        if (totalWarps > 0) {
-            int slot = 0;
-            for (int i = startIndex; i < endIndex; i++) {
-                String warpName = warpNames.get(i);
-                Location loc = UtilityCommands.warps.get(warpName);
+        for (int i = startIndex; i < endIndex; i++) {
+            String warpName = warpNames.get(i);
+            Location loc = warps.get(warpName);
+            String iconId = UtilityCommands.getWarpIcon(warpName);
+            IconChoice choice = getIconChoice(iconId);
 
-                ItemStack icon = resolveWarpIcon(plugin, warpName);
-                ItemMeta meta = icon.getItemMeta();
-                if (meta != null) {
-                    meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', "&6&l" + warpName.toUpperCase()));
-                    List<String> lore = new ArrayList<>();
-                    lore.add(ChatColor.GRAY + "World: " + ChatColor.WHITE + (loc != null && loc.getWorld() != null ? loc.getWorld().getName() : "Unknown"));
-                    if (loc != null) {
-                        lore.add(ChatColor.GRAY + "X: " + ChatColor.YELLOW + loc.getBlockX() +
-                                ChatColor.GRAY + " Y: " + ChatColor.YELLOW + loc.getBlockY() +
-                                ChatColor.GRAY + " Z: " + ChatColor.YELLOW + loc.getBlockZ());
-                    }
-                    lore.add("");
-                    lore.add(ChatColor.YELLOW + "Left-Click » " + ChatColor.GREEN + "Teleport to warp");
-                    if (player.hasPermission("staffcore.command.setwarp") || player.isOp()) {
-                        lore.add(ChatColor.GOLD + "Right-Click » " + ChatColor.AQUA + "Edit warp icon");
-                        lore.add(ChatColor.RED + "Shift + Right-Click » " + ChatColor.RED + "Delete warp");
-                    }
-                    meta.setLore(lore);
-                    icon.setItemMeta(meta);
+            ItemStack item = choice.toItemStack();
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + warpName);
+                List<String> lore = new ArrayList<>();
+                lore.add(ChatColor.GRAY + "World: " + ChatColor.WHITE + (loc.getWorld() != null ? loc.getWorld().getName() : "Unknown"));
+                lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ());
+                lore.add("");
+                lore.add(ChatColor.GREEN + "• Click to teleport to warp");
+
+                if (player.hasPermission("staffcore.command.setwarp") || player.isOp()) {
+                    lore.add(ChatColor.YELLOW + "• Staff Right-Click: " + ChatColor.WHITE + "Change warp icon");
+                    lore.add(ChatColor.RED + "• Staff Shift+Right: " + ChatColor.WHITE + "Delete warp");
                 }
-                inv.setItem(slot++, icon);
+
+                meta.setLore(lore);
+                item.setItemMeta(meta);
             }
-        } else {
-            inv.setItem(13, createItem(Material.BARRIER, "&c&lNo Warps Available",
-                    Arrays.asList("&7No server warps have been created yet!", "&7Staff can set warps using &e/setwarp <name>")));
+            gui.setItem(i - startIndex, item);
         }
 
-        // Slot 45: Previous page
+        // Slot 45: Previous Page Arrow
         if (page > 1) {
-            inv.setItem(45, createItem(Material.ARROW, "&e&l« Previous Page", Collections.singletonList("&7Go to page " + (page - 1))));
+            gui.setItem(45, createItem(Material.ARROW, ChatColor.YELLOW + "" + ChatColor.BOLD + "« Previous Page",
+                    Collections.singletonList(ChatColor.GRAY + "Go to page " + (page - 1))));
+        } else {
+            gui.setItem(45, filler);
         }
 
-        // Slot 47: Total warps counter
-        inv.setItem(47, createItem(matchMaterial("COMPASS", "COMPASS"), "&6&lServer Warps Explorer",
+        // Slot 49: Close Button
+        gui.setItem(49, createItem(Material.BARRIER, ChatColor.RED + "" + ChatColor.BOLD + "Close",
+                Collections.singletonList(ChatColor.GRAY + "Click to close warp browser")));
+
+        // Slot 51: Info Book
+        gui.setItem(51, createItem(Material.BOOK, ChatColor.AQUA + "" + ChatColor.BOLD + "Warp Directory",
                 Arrays.asList(
-                        "&7Total Warps: &e" + totalWarps,
-                        "&7Current Page: &a" + page + " &7/ &e" + maxPages,
-                        "",
-                        "&8Click any warp to travel immediately!"
+                        ChatColor.GRAY + "Total Server Warps: " + ChatColor.YELLOW + warps.size(),
+                        ChatColor.GRAY + "Page: " + ChatColor.WHITE + page + ChatColor.GRAY + " of " + ChatColor.WHITE + totalPages
                 )));
 
-        // Slot 49: Close menu
-        inv.setItem(49, createItem(Material.BARRIER, "&c&lClose", Collections.singletonList("&7Click to close this menu")));
-
-        // Slot 51: Edit / Staff Help
-        if (player.hasPermission("staffcore.command.setwarp") || player.isOp()) {
-            inv.setItem(51, createItem(matchMaterial("NAME_TAG", "NAME_TAG"), "&b&lWarp Management",
-                    Arrays.asList(
-                            "&7Staff Shortcuts:",
-                            "&8• &f/setwarp <name> &7to add new",
-                            "&8• &fRight-Click &7any warp to change icon",
-                            "&8• &fShift+Right-Click &7to delete warp"
-                    )));
+        // Slot 53: Next Page Arrow
+        if (page < totalPages) {
+            gui.setItem(53, createItem(Material.ARROW, ChatColor.YELLOW + "" + ChatColor.BOLD + "Next Page »",
+                    Collections.singletonList(ChatColor.GRAY + "Go to page " + (page + 1))));
+        } else {
+            gui.setItem(53, filler);
         }
 
-        // Slot 53: Next page
-        if (page < maxPages) {
-            inv.setItem(53, createItem(Material.ARROW, "&e&lNext Page »", Collections.singletonList("&7Go to page " + (page + 1))));
-        }
-
-        player.openInventory(inv);
+        player.openInventory(gui);
     }
 
+    /**
+     * Opens the Warp Icon Picker GUI (27 slots).
+     */
     public static void openWarpIconPicker(StaffCore plugin, Player player, String warpName) {
         Inventory inv = Bukkit.createInventory(null, 27, WARP_ICON_PICKER_PREFIX + warpName);
-        ItemStack filler = createPane("GRAY_STAINED_GLASS_PANE", "STAINED_GLASS_PANE", (short) 7, " ");
+        ItemStack filler = createGrayPane();
         for (int i = 0; i < 27; i++) {
             inv.setItem(i, filler);
         }
 
-        int slot = 0;
-        for (IconChoice choice : ICON_CHOICES) {
-            if (slot >= 18) break;
-            ItemStack stack = choice.createStack();
-            ItemMeta meta = stack.getItemMeta();
+        for (int i = 0; i < ICON_CHOICES.size(); i++) {
+            IconChoice choice = ICON_CHOICES.get(i);
+            ItemStack item = choice.toItemStack();
+            ItemMeta meta = item.getItemMeta();
             if (meta != null) {
-                meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', choice.displayName));
+                meta.setDisplayName(choice.displayName);
                 meta.setLore(Arrays.asList(
-                        ChatColor.GRAY + "Theme: " + ChatColor.WHITE + choice.id,
-                        "",
-                        ChatColor.YELLOW + "Click to select this icon for warp &6" + warpName + "!"
+                        ChatColor.GRAY + "Click to choose this icon for " + ChatColor.GOLD + warpName,
+                        ChatColor.DARK_GRAY + "Theme: " + choice.displayName
                 ));
-                stack.setItemMeta(meta);
+                item.setItemMeta(meta);
             }
-            inv.setItem(slot++, stack);
+            inv.setItem(i, item);
         }
 
         // Slot 22: Back button
-        inv.setItem(22, createItem(Material.ARROW, "&e&lBack to Warps", Collections.singletonList("&7Click to return to the warps menu")));
+        inv.setItem(22, createItem(Material.ARROW, ChatColor.YELLOW + "" + ChatColor.BOLD + "Back",
+                Collections.singletonList(ChatColor.GRAY + "Click to return to warps")));
+
         player.openInventory(inv);
     }
 
-    private static ItemStack resolveWarpIcon(StaffCore plugin, String warpName) {
-        String iconKey = UtilityCommands.getWarpIcon(warpName);
-        if (iconKey != null) {
-            for (IconChoice choice : ICON_CHOICES) {
-                if (choice.id.equalsIgnoreCase(iconKey)) {
-                    return choice.createStack();
-                }
-            }
-        }
-        return matchMaterialStack("ENDER_PEARL", "ENDER_PEARL", (short) 0);
-    }
-
-    // =========================================================================
-    //                        CROSS-VERSION HELPERS
-    // =========================================================================
-
-    public static ItemStack createPane(String modernMat, String legacyMat, short legacyData, String name) {
+    public static ItemStack createGrayPane() {
         ItemStack pane;
         try {
-            pane = new ItemStack(Material.valueOf(modernMat));
-        } catch (Throwable t) {
-            pane = new ItemStack(Material.valueOf(legacyMat), 1, legacyData);
+            Material mat = Material.valueOf("GRAY_STAINED_GLASS_PANE");
+            pane = new ItemStack(mat);
+        } catch (IllegalArgumentException e) {
+            pane = new ItemStack(Material.valueOf("STAINED_GLASS_PANE"), 1, (short) 7);
         }
         ItemMeta meta = pane.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(name);
+            meta.setDisplayName(" ");
             pane.setItemMeta(meta);
         }
         return pane;
     }
 
-    public static Material matchMaterial(String modernMat, String legacyMat) {
+    public static Material matchCrossVersionMaterial(String modernName, String legacyName) {
         try {
-            return Material.valueOf(modernMat);
-        } catch (Throwable t) {
-            return Material.valueOf(legacyMat);
-        }
-    }
-
-    public static ItemStack matchMaterialStack(String modernMat, String legacyMat, short legacyData) {
-        try {
-            return new ItemStack(Material.valueOf(modernMat));
-        } catch (Throwable t) {
-            return new ItemStack(Material.valueOf(legacyMat), 1, legacyData);
+            return Material.valueOf(modernName);
+        } catch (IllegalArgumentException e) {
+            return Material.valueOf(legacyName);
         }
     }
 
@@ -343,14 +442,8 @@ public class TeleportGui {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', name));
-            if (lore != null) {
-                List<String> colored = new ArrayList<>();
-                for (String l : lore) {
-                    colored.add(ChatColor.translateAlternateColorCodes('&', l));
-                }
-                meta.setLore(colored);
-            }
+            meta.setDisplayName(name);
+            if (lore != null) meta.setLore(lore);
             item.setItemMeta(meta);
         }
         return item;
