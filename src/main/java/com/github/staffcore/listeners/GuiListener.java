@@ -53,7 +53,6 @@ public class GuiListener implements Listener {
             @SuppressWarnings("deprecation")
             OfflinePlayer target = onlineTarget != null ? onlineTarget : Bukkit.getOfflinePlayer(targetName);
 
-            // Slot 4: Player Skull - Right-click to reveal/hide IP address
             if (event.getRawSlot() == 4 && event.isRightClick()) {
                 if (!staff.hasPermission("staffcore.check.ip") && !staff.isOp()) return;
 
@@ -77,13 +76,11 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 14: Punishment History - Click to open full punishment reasons list
             if (event.getRawSlot() == 14) {
                 CheckGui.openHistoryGui(core, staff, target);
                 return;
             }
 
-            // Slot 22: Barrier close slot
             if (event.getRawSlot() == 22) {
                 staff.closeInventory();
             }
@@ -114,13 +111,11 @@ public class GuiListener implements Listener {
             Player player = (Player) event.getWhoClicked();
             int rawSlot = event.getRawSlot();
 
-            // Slot 49: Close
             if (rawSlot == 49) {
                 player.closeInventory();
                 return;
             }
 
-            // Slot 51: Mode Switcher (Bedrock / Sub-Menu Mode toggle)
             if (rawSlot == 51) {
                 TeleportGui.toggleBedrockMode(player.getUniqueId());
                 boolean nowBedrock = TeleportGui.isBedrockMode(player.getUniqueId());
@@ -146,7 +141,6 @@ public class GuiListener implements Listener {
 
             ClickType click = event.getClick();
 
-            // Java Shortcut: Shift + Right-Click -> Delete Home
             if (click == ClickType.SHIFT_RIGHT) {
                 homes.remove(homeDisplayName);
                 Map<String, String> icons = UtilityCommands.playerHomeIcons.get(player.getUniqueId());
@@ -159,7 +153,6 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Java Shortcut: Shift + Left-Click -> Rename Home via chat prompt
             if (click == ClickType.SHIFT_LEFT) {
                 player.closeInventory();
                 TeleportGui.renamingHomeMap.put(player.getUniqueId(), homeDisplayName);
@@ -168,20 +161,16 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Java Shortcut: Right-Click -> Open Icon Picker directly
             if (event.isRightClick()) {
                 TeleportGui.openHomeIconPicker(core, player, homeDisplayName);
                 return;
             }
 
-            // Standard Left-Click / Bedrock single tap
             if (TeleportGui.isBedrockMode(player.getUniqueId())) {
-                // Open touch-friendly action sub-menu for Bedrock players
                 TeleportGui.openHomeActionsMenu(core, player, homeDisplayName);
                 return;
             }
 
-            // Direct Java Mode Left-Click: Instant Teleport
             Location loc = homes.get(homeDisplayName);
             if (loc != null && loc.getWorld() != null) {
                 player.closeInventory();
@@ -207,7 +196,6 @@ public class GuiListener implements Listener {
             Map<String, Location> homes = UtilityCommands.playerHomes.get(player.getUniqueId());
             int rawSlot = event.getRawSlot();
 
-            // Slot 22: Back button
             if (rawSlot == 22) {
                 TeleportGui.openHomeGui(core, player);
                 return;
@@ -219,7 +207,6 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 10: 🟢 Teleport Button
             if (rawSlot == 10) {
                 Location loc = homes.get(homeName);
                 if (loc != null && loc.getWorld() != null) {
@@ -232,13 +219,11 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 12: 🎨 Change Icon Button
             if (rawSlot == 12) {
                 TeleportGui.openHomeIconPicker(core, player, homeName);
                 return;
             }
 
-            // Slot 14: 🏷️ Rename Button
             if (rawSlot == 14) {
                 player.closeInventory();
                 TeleportGui.renamingHomeMap.put(player.getUniqueId(), homeName);
@@ -247,7 +232,6 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 16: 🔴 Delete Button
             if (rawSlot == 16) {
                 homes.remove(homeName);
                 Map<String, String> icons = UtilityCommands.playerHomeIcons.get(player.getUniqueId());
@@ -310,27 +294,34 @@ public class GuiListener implements Listener {
                 currentPage = Integer.parseInt(pagePart);
             } catch (Throwable ignored) {}
 
-            // Slot 45: Previous page
             if (rawSlot == 45 && currentPage > 1) {
                 TeleportGui.openWarpGui(core, player, currentPage - 1);
                 return;
             }
 
-            // Slot 49: Close
+            // Slot 47: "★ My Warps" Button
+            if (rawSlot == 47) {
+                TeleportGui.openMyWarpsGui(core, player);
+                return;
+            }
+
             if (rawSlot == 49) {
                 player.closeInventory();
                 return;
             }
 
-            // Slot 51: Info Book / Staff rename hint
-            if (rawSlot == 51 && (player.hasPermission("staffcore.command.setwarp") || player.isOp())) {
-                player.closeInventory();
-                player.sendMessage(core.getMessageManager().color(
-                        "&6&l[WARPS] &aTo rename a warp, type: &f/setwarp <new_name> &aand &f/delwarp <old_name>&a, or Right-Click any warp to customize its icon."));
+            if (rawSlot == 51) {
+                TeleportGui.toggleBedrockMode(player.getUniqueId());
+                boolean nowBedrock = TeleportGui.isBedrockMode(player.getUniqueId());
+                if (nowBedrock) {
+                    player.sendMessage(core.getMessageManager().color("&6[StaffCore] &aSwitched to &eSub-Menu Mode &7(Touch & Bedrock friendly)!"));
+                } else {
+                    player.sendMessage(core.getMessageManager().color("&6[StaffCore] &aSwitched to &bDirect Java Mode &7(Left-click instant teleport)!"));
+                }
+                TeleportGui.openWarpGui(core, player, currentPage);
                 return;
             }
 
-            // Slot 53: Next page
             if (rawSlot == 53) {
                 TeleportGui.openWarpGui(core, player, currentPage + 1);
                 return;
@@ -341,16 +332,25 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            String warpName = ChatColor.stripColor(clicked.getItemMeta().getDisplayName()).trim().toLowerCase();
+            String warpName = ChatColor.stripColor(clicked.getItemMeta().getDisplayName()).replace("[Private]", "").trim().toLowerCase();
             Location loc = UtilityCommands.warps.get(warpName);
             if (loc == null) return;
 
+            if (!UtilityCommands.canAccessWarp(player, warpName)) {
+                player.sendMessage(core.getMessageManager().color(
+                        core.getConfig().getString("messages.warp-is-private", "&cThis warp is private!")));
+                return;
+            }
+
+            boolean isOwner = UtilityCommands.isWarpOwner(warpName, player.getUniqueId());
+            boolean isAdmin = player.hasPermission("staffcore.command.delwarp.admin") || player.hasPermission("staffcore.admin") || player.isOp();
             ClickType click = event.getClick();
 
-            // Staff Shift + Right-Click: Delete warp
-            if (click == ClickType.SHIFT_RIGHT && (player.hasPermission("staffcore.command.setwarp") || player.isOp())) {
+            if (click == ClickType.SHIFT_RIGHT && (isOwner || isAdmin)) {
                 UtilityCommands.warps.remove(warpName);
                 UtilityCommands.warpIcons.remove(warpName);
+                UtilityCommands.warpOwners.remove(warpName);
+                UtilityCommands.privateWarps.remove(warpName);
                 UtilityCommands.saveStates(core);
                 player.sendMessage(core.getMessageManager().color(
                         core.getConfig().getString("messages.delwarp-success", "&aSuccessfully deleted warp &e%warp%&a.")
@@ -359,13 +359,16 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Staff Right-Click: Edit warp icon
-            if (event.isRightClick() && (player.hasPermission("staffcore.command.setwarp") || player.isOp())) {
+            if (event.isRightClick() && (isOwner || isAdmin)) {
                 TeleportGui.openWarpIconPicker(core, player, warpName);
                 return;
             }
 
-            // Left-Click: Teleport to Warp
+            if (TeleportGui.isBedrockMode(player.getUniqueId()) && (isOwner || isAdmin)) {
+                TeleportGui.openWarpActionsMenu(core, player, warpName);
+                return;
+            }
+
             if (loc.getWorld() != null) {
                 player.closeInventory();
                 player.teleport(loc);
@@ -376,7 +379,170 @@ public class GuiListener implements Listener {
             return;
         }
 
-        // 7. Warp Icon Picker GUI
+        // 7. "My Warps" Management GUI
+        if (title.startsWith(TeleportGui.MY_WARPS_GUI_PREFIX)) {
+            event.setCancelled(true);
+            if (!(event.getWhoClicked() instanceof Player)) return;
+
+            Player player = (Player) event.getWhoClicked();
+            int rawSlot = event.getRawSlot();
+
+            if (rawSlot == 45) {
+                TeleportGui.openWarpGui(core, player, 1);
+                return;
+            }
+
+            if (rawSlot == 49) {
+                player.closeInventory();
+                return;
+            }
+
+            if (rawSlot == 51) {
+                TeleportGui.toggleBedrockMode(player.getUniqueId());
+                boolean nowBedrock = TeleportGui.isBedrockMode(player.getUniqueId());
+                if (nowBedrock) {
+                    player.sendMessage(core.getMessageManager().color("&6[StaffCore] &aSwitched to &eSub-Menu Mode &7(Touch & Bedrock friendly)!"));
+                } else {
+                    player.sendMessage(core.getMessageManager().color("&6[StaffCore] &aSwitched to &bDirect Java Mode &7(Left-click instant teleport)!"));
+                }
+                TeleportGui.openMyWarpsGui(core, player);
+                return;
+            }
+
+            ItemStack clicked = event.getCurrentItem();
+            if (clicked == null || !clicked.hasItemMeta() || !clicked.getItemMeta().hasDisplayName()) {
+                return;
+            }
+
+            String warpName = ChatColor.stripColor(clicked.getItemMeta().getDisplayName()).replace("[Private]", "").trim().toLowerCase();
+            Location loc = UtilityCommands.warps.get(warpName);
+            if (loc == null) return;
+
+            ClickType click = event.getClick();
+
+            if (click == ClickType.SHIFT_RIGHT) {
+                UtilityCommands.warps.remove(warpName);
+                UtilityCommands.warpIcons.remove(warpName);
+                UtilityCommands.warpOwners.remove(warpName);
+                UtilityCommands.privateWarps.remove(warpName);
+                UtilityCommands.saveStates(core);
+                player.sendMessage(core.getMessageManager().color(
+                        core.getConfig().getString("messages.delwarp-success", "&aSuccessfully deleted warp &e%warp%&a.")
+                                .replace("%warp%", warpName)));
+                TeleportGui.openMyWarpsGui(core, player);
+                return;
+            }
+
+            if (click == ClickType.SHIFT_LEFT) {
+                player.closeInventory();
+                TeleportGui.renamingWarpMap.put(player.getUniqueId(), warpName);
+                player.sendMessage(core.getMessageManager().color(
+                        "&e&l[WARPS] &aPlease type the new name for warp &6" + warpName + " &ain chat &7(or type &ccancel&7):"));
+                return;
+            }
+
+            if (event.isRightClick()) {
+                TeleportGui.openWarpIconPicker(core, player, warpName);
+                return;
+            }
+
+            if (TeleportGui.isBedrockMode(player.getUniqueId())) {
+                TeleportGui.openWarpActionsMenu(core, player, warpName);
+                return;
+            }
+
+            if (loc.getWorld() != null) {
+                player.closeInventory();
+                player.teleport(loc);
+                player.sendMessage(core.getMessageManager().color(
+                        core.getConfig().getString("messages.warp-teleported", "&aTeleported to warp &e%warp%&a.")
+                                .replace("%warp%", warpName)));
+            }
+            return;
+        }
+
+        // 8. Bedrock / Touch Warp Actions Sub-Menu ("Manage Warp: <warp_name>")
+        if (title.startsWith(TeleportGui.WARP_ACTIONS_PREFIX)) {
+            event.setCancelled(true);
+            if (!(event.getWhoClicked() instanceof Player)) return;
+
+            Player player = (Player) event.getWhoClicked();
+            String warpName = ChatColor.stripColor(title.substring(TeleportGui.WARP_ACTIONS_PREFIX.length())).trim().toLowerCase();
+            Location loc = UtilityCommands.warps.get(warpName);
+            int rawSlot = event.getRawSlot();
+
+            if (rawSlot == 22) {
+                TeleportGui.openMyWarpsGui(core, player);
+                return;
+            }
+
+            if (loc == null) {
+                player.sendMessage(core.getMessageManager().color("&cWarp &e" + warpName + " &cwas not found!"));
+                TeleportGui.openMyWarpsGui(core, player);
+                return;
+            }
+
+            // Slot 10: Teleport
+            if (rawSlot == 10) {
+                if (loc.getWorld() != null) {
+                    player.closeInventory();
+                    player.teleport(loc);
+                    player.sendMessage(core.getMessageManager().color(
+                            core.getConfig().getString("messages.warp-teleported", "&aTeleported to warp &e%warp%&a.")
+                                    .replace("%warp%", warpName)));
+                }
+                return;
+            }
+
+            // Slot 12: Change Icon
+            if (rawSlot == 12) {
+                TeleportGui.openWarpIconPicker(core, player, warpName);
+                return;
+            }
+
+            // Slot 14: Rename
+            if (rawSlot == 14) {
+                player.closeInventory();
+                TeleportGui.renamingWarpMap.put(player.getUniqueId(), warpName);
+                player.sendMessage(core.getMessageManager().color(
+                        "&e&l[WARPS] &aPlease type the new name for warp &6" + warpName + " &ain chat &7(or type &ccancel&7):"));
+                return;
+            }
+
+            // Slot 15: Toggle Visibility (Public / Private)
+            if (rawSlot == 15) {
+                boolean wasPrivate = UtilityCommands.isWarpPrivate(warpName);
+                UtilityCommands.setWarpPrivate(warpName, !wasPrivate);
+                UtilityCommands.saveStates(core);
+
+                if (!wasPrivate) {
+                    player.sendMessage(core.getMessageManager().color(
+                            "&6[StaffCore] &aWarp &e" + warpName + " &ais now &c&lPRIVATE &7(hidden from other players)."));
+                } else {
+                    player.sendMessage(core.getMessageManager().color(
+                            "&6[StaffCore] &aWarp &e" + warpName + " &ais now &a&lPUBLIC &7(visible to everyone)."));
+                }
+                TeleportGui.openWarpActionsMenu(core, player, warpName);
+                return;
+            }
+
+            // Slot 16: Delete
+            if (rawSlot == 16) {
+                UtilityCommands.warps.remove(warpName);
+                UtilityCommands.warpIcons.remove(warpName);
+                UtilityCommands.warpOwners.remove(warpName);
+                UtilityCommands.privateWarps.remove(warpName);
+                UtilityCommands.saveStates(core);
+                player.sendMessage(core.getMessageManager().color(
+                        core.getConfig().getString("messages.delwarp-success", "&aSuccessfully deleted warp &e%warp%&a.")
+                                .replace("%warp%", warpName)));
+                TeleportGui.openMyWarpsGui(core, player);
+                return;
+            }
+            return;
+        }
+
+        // 9. Warp Icon Picker GUI
         if (title.startsWith(TeleportGui.WARP_ICON_PICKER_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -386,7 +552,11 @@ public class GuiListener implements Listener {
             int rawSlot = event.getRawSlot();
 
             if (rawSlot == 22) {
-                TeleportGui.openWarpGui(core, player, 1);
+                if (TeleportGui.isBedrockMode(player.getUniqueId()) || UtilityCommands.isWarpOwner(warpName, player.getUniqueId())) {
+                    TeleportGui.openWarpActionsMenu(core, player, warpName);
+                } else {
+                    TeleportGui.openWarpGui(core, player, 1);
+                }
                 return;
             }
 
@@ -396,19 +566,22 @@ public class GuiListener implements Listener {
                 UtilityCommands.saveStates(core);
                 player.sendMessage(core.getMessageManager().color(
                         "&aSelected icon " + choice.displayName + " &afor warp &6" + warpName + "&a!"));
-                TeleportGui.openWarpGui(core, player, 1);
+
+                if (TeleportGui.isBedrockMode(player.getUniqueId()) || UtilityCommands.isWarpOwner(warpName, player.getUniqueId())) {
+                    TeleportGui.openWarpActionsMenu(core, player, warpName);
+                } else {
+                    TeleportGui.openWarpGui(core, player, 1);
+                }
             }
         }
     }
 
-    /**
-     * Handles chat input for home renaming when clicking the Name Tag / Shift-Click in /home.
-     */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
+        // 1. Rename Home
         if (TeleportGui.renamingHomeMap.containsKey(uuid)) {
             event.setCancelled(true);
             String oldName = TeleportGui.renamingHomeMap.remove(uuid);
@@ -428,10 +601,15 @@ public class GuiListener implements Listener {
 
             Map<String, Location> homes = UtilityCommands.playerHomes.get(uuid);
             if (homes != null && homes.containsKey(oldName)) {
+                if (!oldName.equals(newName) && homes.containsKey(newName)) {
+                    player.sendMessage(plugin.getMessageManager().color("&cA home with the name &e" + newName + " &calready exists!"));
+                    Bukkit.getScheduler().runTask(plugin, () -> TeleportGui.openHomeGui(plugin, player));
+                    return;
+                }
+
                 Location loc = homes.remove(oldName);
                 homes.put(newName, loc);
 
-                // Transfer customized icon
                 String icon = UtilityCommands.getHomeIcon(uuid, oldName);
                 UtilityCommands.setHomeIcon(uuid, newName, icon);
                 Map<String, String> icons = UtilityCommands.playerHomeIcons.get(uuid);
@@ -443,6 +621,58 @@ public class GuiListener implements Listener {
             }
 
             Bukkit.getScheduler().runTask(plugin, () -> TeleportGui.openHomeGui(plugin, player));
+            return;
+        }
+
+        // 2. Rename Warp
+        if (TeleportGui.renamingWarpMap.containsKey(uuid)) {
+            event.setCancelled(true);
+            String oldName = TeleportGui.renamingWarpMap.remove(uuid);
+            String newName = event.getMessage().trim().toLowerCase();
+
+            if (newName.equalsIgnoreCase("cancel")) {
+                player.sendMessage(plugin.getMessageManager().color("&cWarp rename cancelled."));
+                Bukkit.getScheduler().runTask(plugin, () -> TeleportGui.openMyWarpsGui(plugin, player));
+                return;
+            }
+
+            if (newName.isEmpty() || newName.contains(" ") || newName.length() > 16) {
+                player.sendMessage(plugin.getMessageManager().color("&cInvalid warp name! Must be 1-16 characters without spaces."));
+                Bukkit.getScheduler().runTask(plugin, () -> TeleportGui.openMyWarpsGui(plugin, player));
+                return;
+            }
+
+            if (!oldName.equals(newName) && UtilityCommands.warps.containsKey(newName)) {
+                player.sendMessage(plugin.getMessageManager().color("&cA warp with the name &e" + newName + " &calready exists!"));
+                Bukkit.getScheduler().runTask(plugin, () -> TeleportGui.openMyWarpsGui(plugin, player));
+                return;
+            }
+
+            Location loc = UtilityCommands.warps.remove(oldName);
+            if (loc != null) {
+                UtilityCommands.warps.put(newName, loc);
+
+                String icon = UtilityCommands.getWarpIcon(oldName);
+                UtilityCommands.setWarpIcon(newName, icon);
+                UtilityCommands.warpIcons.remove(oldName);
+
+                UUID owner = UtilityCommands.warpOwners.remove(oldName);
+                if (owner != null) {
+                    UtilityCommands.warpOwners.put(newName, owner);
+                } else {
+                    UtilityCommands.warpOwners.put(newName, uuid);
+                }
+
+                if (UtilityCommands.privateWarps.remove(oldName)) {
+                    UtilityCommands.privateWarps.add(newName);
+                }
+
+                UtilityCommands.saveStates(plugin);
+                player.sendMessage(plugin.getMessageManager().color(
+                        "&aSuccessfully renamed warp &e" + oldName + " &ato &6" + newName + "&a!"));
+            }
+
+            Bukkit.getScheduler().runTask(plugin, () -> TeleportGui.openMyWarpsGui(plugin, player));
         }
     }
 }

@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.StringUtil;
+import org.bukkit.Material;
 
 import java.util.*;
 
@@ -51,8 +52,9 @@ public class StaffTabCompleter implements TabCompleter {
             return completions;
         }
 
-        // 2. Commands without tab completion
+        // 2. Commands without tab completion (including /sethome and /setwarp so they never suggest existing names)
         if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") || cmd.equals("setjail") || cmd.equals("setspawn") ||
+            cmd.equals("sethome") || cmd.equals("setwarp") ||
             cmd.equals("cleargrounditems") || cmd.equals("cleargrouditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
             return Collections.emptyList();
         }
@@ -65,26 +67,52 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 2b. /warp <warp_name> [player|*] & /delwarp <warp_name> & /setwarp [warp_name]
-        if (cmd.equals("warp") || cmd.equals("delwarp") || cmd.equals("setwarp")) {
+        // 2b. /warp <warp_name> [player|*]
+        if (cmd.equals("warp")) {
             if (args.length == 1) {
-                StringUtil.copyPartialMatches(args[0].toLowerCase(), UtilityCommands.getWarpNames(), completions);
+                Set<String> available = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+                boolean isAdmin = !(sender instanceof Player)
+                        || sender.hasPermission("staffcore.warps.admin")
+                        || sender.hasPermission("staffcore.command.warp.others")
+                        || sender.hasPermission("staffcore.admin")
+                        || sender.isOp();
+                Player player = sender instanceof Player ? (Player) sender : null;
+
+                for (String w : UtilityCommands.getWarpNames()) {
+                    if (isAdmin || !UtilityCommands.isWarpPrivate(w) || (player != null && UtilityCommands.isWarpOwner(w, player.getUniqueId()))) {
+                        available.add(w);
+                    }
+                }
+                StringUtil.copyPartialMatches(args[0].toLowerCase(), available, completions);
                 Collections.sort(completions);
                 return completions;
-            } else if (args.length == 2 && cmd.equals("warp") && (sender.hasPermission("staffcore.command.warp.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
+            } else if (args.length == 2 && (sender.hasPermission("staffcore.command.warp.others") || sender.hasPermission("staffcore.admin") || sender.isOp())) {
                 return getPlayerNameCompletions(args[1], true);
             }
             return Collections.emptyList();
         }
 
-        // 2c. /home <home_name>, /delhome <home_name>, /sethome [home_name]
-        if (cmd.equals("home") || cmd.equals("delhome") || cmd.equals("sethome")) {
+        // 2c. /delwarp <warp_name> (Suggests caller personal warps, or all warps if admin)
+        if (cmd.equals("delwarp")) {
+            if (args.length == 1) {
+                Set<String> available;
+                if (!(sender instanceof Player) || sender.hasPermission("staffcore.command.delwarp.admin") || sender.hasPermission("staffcore.admin") || sender.isOp()) {
+                    available = UtilityCommands.getWarpNames();
+                } else {
+                    available = UtilityCommands.getPlayerWarps(((Player) sender).getUniqueId());
+                }
+                StringUtil.copyPartialMatches(args[0].toLowerCase(), available, completions);
+                Collections.sort(completions);
+                return completions;
+            }
+            return Collections.emptyList();
+        }
+
+        // 2d. /home <home_name>, /delhome <home_name> (Suggests caller personal homes only)
+        if (cmd.equals("home") || cmd.equals("delhome")) {
             if (args.length == 1 && sender instanceof Player) {
                 Player player = (Player) sender;
                 Set<String> homes = new TreeSet<>(UtilityCommands.getPlayerHomeNames(player.getUniqueId()));
-                if (cmd.equals("sethome") && !homes.contains("home")) {
-                    homes.add("home");
-                }
                 StringUtil.copyPartialMatches(args[0].toLowerCase(), homes, completions);
                 Collections.sort(completions);
                 return completions;
@@ -176,6 +204,7 @@ public class StaffTabCompleter implements TabCompleter {
         }
 
         // 4. /give <player|*> <item> [amount] (includes ALL runtime 1.8 - 1.21+ items & Netherite)
+       // 4. /give <player|*> <item> [amount] (includes ALL runtime 1.8 - 1.21+ items & Netherite)
         if (cmd.equals("give")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], true);
@@ -184,15 +213,22 @@ public class StaffTabCompleter implements TabCompleter {
                 if (rawQuery.contains("netherrite")) {
                     rawQuery = rawQuery.replace("netherrite", "netherite");
                 }
-                List<String> allItems = UtilityCommands.getAllGiveableItemNames();
                 List<String> startsWithMatches = new ArrayList<>();
                 List<String> containsMatches = new ArrayList<>();
 
-                for (String item : allItems) {
+                for (org.bukkit.Material m : org.bukkit.Material.values()) {
+                    if (m == null) continue;
+                    String item = m.name().toLowerCase();
+                    if (item.equals("air") || item.endsWith("_air") || item.startsWith("legacy_")) continue;
                     if (item.startsWith(rawQuery)) {
                         startsWithMatches.add(item);
                     } else if (!rawQuery.isEmpty() && (item.contains(rawQuery) || item.replace("_", "").contains(rawQuery.replace("_", "")))) {
                         containsMatches.add(item);
+                    }
+                }
+                for (String itemAlias : Arrays.asList("gapple", "egap", "notch_apple", "totem", "pearl", "xpbottle", "cmdblock", "steak")) {
+                    if (itemAlias.startsWith(rawQuery)) {
+                        startsWithMatches.add(itemAlias);
                     }
                 }
                 completions.addAll(startsWithMatches);

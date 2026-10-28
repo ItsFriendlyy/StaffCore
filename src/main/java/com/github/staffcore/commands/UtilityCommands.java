@@ -42,12 +42,12 @@ public class UtilityCommands implements CommandExecutor {
     // Spawn, Warps, and Homes storage (persisted in states.yml)
     public static Location spawnLocation = null;
     public static final Map<String, Location> warps = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-    public static final Map<String, String> warpIcons = new HashMap<>();
+    public static final Map<String, String> warpIcons = new HashMap<>(); // warpName -> iconId
+    public static final Map<String, UUID> warpOwners = new HashMap<>(); // warpName -> owner UUID
+    public static final Set<String> privateWarps = new HashSet<>(); // lowercase warp names that are private
 
     public static final Map<UUID, Map<String, Location>> playerHomes = new HashMap<>();
-    public static final Map<UUID, Map<String, String>> playerHomeIcons = new HashMap<>();
-
-    private static List<String> cachedGiveableItemNames = null;
+    public static final Map<UUID, Map<String, String>> playerHomeIcons = new HashMap<>(); // uuid -> (homeName -> iconId)
 
     public static final String INVSEE_PREFIX = ChatColor.DARK_GRAY + "Invsee: " + ChatColor.DARK_RED;
     public static final String ARMOR_PREFIX = ChatColor.DARK_GRAY + "Armor: " + ChatColor.DARK_RED;
@@ -61,11 +61,8 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     public static void setInvincible(UUID uuid, boolean state) {
-        if (state) {
-            invinciblePlayers.add(uuid);
-        } else {
-            invinciblePlayers.remove(uuid);
-        }
+        if (state) invinciblePlayers.add(uuid);
+        else invinciblePlayers.remove(uuid);
     }
 
     public static boolean isFlyEnabled(UUID uuid) {
@@ -73,11 +70,8 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     public static void setFlyEnabled(UUID uuid, boolean state) {
-        if (state) {
-            flyPlayers.add(uuid);
-        } else {
-            flyPlayers.remove(uuid);
-        }
+        if (state) flyPlayers.add(uuid);
+        else flyPlayers.remove(uuid);
     }
 
     public static Set<String> getWarpNames() {
@@ -118,6 +112,105 @@ public class UtilityCommands implements CommandExecutor {
         return spawnLocation != null ? spawnLocation.clone() : null;
     }
 
+    public static Set<String> getPlayerWarps(UUID uuid) {
+        if (uuid == null) return Collections.emptySet();
+        Set<String> set = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (Map.Entry<String, UUID> entry : warpOwners.entrySet()) {
+            if (uuid.equals(entry.getValue()) && warps.containsKey(entry.getKey())) {
+                set.add(entry.getKey());
+            }
+        }
+        return Collections.unmodifiableSet(set);
+    }
+
+    public static int getPlayerWarpCount(UUID uuid) {
+        if (uuid == null) return 0;
+        int count = 0;
+        for (Map.Entry<String, UUID> entry : warpOwners.entrySet()) {
+            if (uuid.equals(entry.getValue()) && warps.containsKey(entry.getKey())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public static boolean isWarpOwner(String warpName, UUID uuid) {
+        if (warpName == null || uuid == null) return false;
+        UUID owner = warpOwners.get(warpName.toLowerCase());
+        return uuid.equals(owner);
+    }
+
+    public static boolean isWarpPrivate(String warpName) {
+        if (warpName == null) return false;
+        return privateWarps.contains(warpName.toLowerCase());
+    }
+
+    public static void setWarpPrivate(String warpName, boolean isPrivate) {
+        if (warpName == null) return;
+        if (isPrivate) {
+            privateWarps.add(warpName.toLowerCase());
+        } else {
+            privateWarps.remove(warpName.toLowerCase());
+        }
+    }
+
+    public static boolean canAccessWarp(Player player, String warpName) {
+        if (warpName == null) return false;
+        if (!isWarpPrivate(warpName)) return true;
+        if (player == null) return true;
+        if (player.hasPermission("staffcore.warps.admin")
+                || player.hasPermission("staffcore.command.warp.others")
+                || player.hasPermission("staffcore.admin")
+                || player.isOp()) {
+            return true;
+        }
+        return isWarpOwner(warpName, player.getUniqueId());
+    }
+
+    public static int getMaxHomes(Player player, StaffCore plugin) {
+        if (player == null) return 5;
+        if (player.hasPermission("staffcore.command.sethome.unlimited") || player.isOp()) {
+            return Integer.MAX_VALUE;
+        }
+        int limit = (plugin != null) ? plugin.getConfig().getInt("homes.max-homes", 5) : 5;
+        if (player.hasPermission("staffcore.homes.15")) limit = Math.max(limit, 15);
+        if (player.hasPermission("staffcore.homes.10")) limit = Math.max(limit, 10);
+
+        for (org.bukkit.permissions.PermissionAttachmentInfo pai : player.getEffectivePermissions()) {
+            String perm = pai.getPermission().toLowerCase();
+            if (perm.startsWith("staffcore.homes.") && pai.getValue()) {
+                try {
+                    int n = Integer.parseInt(perm.substring("staffcore.homes.".length()));
+                    limit = Math.max(limit, n);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return limit;
+    }
+
+    public static int getMaxWarps(Player player, StaffCore plugin) {
+        if (player == null) return 2;
+        if (player.hasPermission("staffcore.warps.unlimited")
+                || player.hasPermission("staffcore.command.setwarp.unlimited")
+                || player.isOp()) {
+            return Integer.MAX_VALUE;
+        }
+        int limit = (plugin != null) ? plugin.getConfig().getInt("warps.max-warps", 2) : 2;
+        if (player.hasPermission("staffcore.warps.8")) limit = Math.max(limit, 8);
+        if (player.hasPermission("staffcore.warps.4")) limit = Math.max(limit, 4);
+
+        for (org.bukkit.permissions.PermissionAttachmentInfo pai : player.getEffectivePermissions()) {
+            String perm = pai.getPermission().toLowerCase();
+            if (perm.startsWith("staffcore.warps.") && pai.getValue()) {
+                try {
+                    int n = Integer.parseInt(perm.substring("staffcore.warps.".length()));
+                    limit = Math.max(limit, n);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return limit;
+    }
+
     public static void loadStates(StaffCore plugin) {
         if (plugin == null) return;
         File file = new File(plugin.getDataFolder(), "states.yml");
@@ -131,40 +224,30 @@ public class UtilityCommands implements CommandExecutor {
         spawnLocation = null;
         warps.clear();
         warpIcons.clear();
+        warpOwners.clear();
+        privateWarps.clear();
         playerHomes.clear();
         playerHomeIcons.clear();
 
         for (String s : data.getStringList("invincible")) {
-            try {
-                invinciblePlayers.add(UUID.fromString(s));
-            } catch (Exception ignored) {}
+            try { invinciblePlayers.add(UUID.fromString(s)); } catch (Exception ignored) {}
         }
 
         for (String s : data.getStringList("fly")) {
-            try {
-                flyPlayers.add(UUID.fromString(s));
-            } catch (Exception ignored) {}
+            try { flyPlayers.add(UUID.fromString(s)); } catch (Exception ignored) {}
         }
 
         ConfigurationSection walkSec = data.getConfigurationSection("walk-speed");
         if (walkSec != null) {
             for (String key : walkSec.getKeys(false)) {
-                try {
-                    UUID uuid = UUID.fromString(key);
-                    float speed = (float) walkSec.getDouble(key, 0.2);
-                    walkSpeeds.put(uuid, speed);
-                } catch (Exception ignored) {}
+                try { walkSpeeds.put(UUID.fromString(key), (float) walkSec.getDouble(key, 0.2)); } catch (Exception ignored) {}
             }
         }
 
         ConfigurationSection flySec = data.getConfigurationSection("fly-speed");
         if (flySec != null) {
             for (String key : flySec.getKeys(false)) {
-                try {
-                    UUID uuid = UUID.fromString(key);
-                    float speed = (float) flySec.getDouble(key, 0.1);
-                    flySpeeds.put(uuid, speed);
-                } catch (Exception ignored) {}
+                try { flySpeeds.put(UUID.fromString(key), (float) flySec.getDouble(key, 0.1)); } catch (Exception ignored) {}
             }
         }
 
@@ -177,9 +260,7 @@ public class UtilityCommands implements CommandExecutor {
         if (warpSec != null) {
             for (String warpName : warpSec.getKeys(false)) {
                 Location loc = deserializeLocation(warpSec.getConfigurationSection(warpName));
-                if (loc != null) {
-                    warps.put(warpName.toLowerCase(), loc);
-                }
+                if (loc != null) warps.put(warpName.toLowerCase(), loc);
             }
         }
 
@@ -187,29 +268,34 @@ public class UtilityCommands implements CommandExecutor {
         if (warpIconsSec != null) {
             for (String warpName : warpIconsSec.getKeys(false)) {
                 String icon = warpIconsSec.getString(warpName);
-                if (icon != null) {
-                    warpIcons.put(warpName.toLowerCase(), icon);
-                }
+                if (icon != null) warpIcons.put(warpName.toLowerCase(), icon);
             }
+        }
+
+        ConfigurationSection ownersSec = data.getConfigurationSection("warp-owners");
+        if (ownersSec != null) {
+            for (String warpName : ownersSec.getKeys(false)) {
+                try { warpOwners.put(warpName.toLowerCase(), UUID.fromString(ownersSec.getString(warpName))); } catch (Exception ignored) {}
+            }
+        }
+
+        for (String s : data.getStringList("private-warps")) {
+            if (s != null && !s.trim().isEmpty()) privateWarps.add(s.trim().toLowerCase());
         }
 
         ConfigurationSection homesSec = data.getConfigurationSection("homes");
         if (homesSec != null) {
             for (String uuidStr : homesSec.getKeys(false)) {
                 try {
-                    UUID uuid = UUID.fromString(uuidStr);
+                    UUID u = UUID.fromString(uuidStr);
                     ConfigurationSection userHomesSec = homesSec.getConfigurationSection(uuidStr);
                     if (userHomesSec != null) {
                         Map<String, Location> map = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
                         for (String homeName : userHomesSec.getKeys(false)) {
                             Location loc = deserializeLocation(userHomesSec.getConfigurationSection(homeName));
-                            if (loc != null) {
-                                map.put(homeName.toLowerCase(), loc);
-                            }
+                            if (loc != null) map.put(homeName.toLowerCase(), loc);
                         }
-                        if (!map.isEmpty()) {
-                            playerHomes.put(uuid, map);
-                        }
+                        if (!map.isEmpty()) playerHomes.put(u, map);
                     }
                 } catch (Exception ignored) {}
             }
@@ -219,19 +305,15 @@ public class UtilityCommands implements CommandExecutor {
         if (homeIconsSec != null) {
             for (String uuidStr : homeIconsSec.getKeys(false)) {
                 try {
-                    UUID uuid = UUID.fromString(uuidStr);
+                    UUID u = UUID.fromString(uuidStr);
                     ConfigurationSection userIcons = homeIconsSec.getConfigurationSection(uuidStr);
                     if (userIcons != null) {
                         Map<String, String> iconMap = new HashMap<>();
                         for (String homeName : userIcons.getKeys(false)) {
                             String icon = userIcons.getString(homeName);
-                            if (icon != null) {
-                                iconMap.put(homeName.toLowerCase(), icon);
-                            }
+                            if (icon != null) iconMap.put(homeName.toLowerCase(), icon);
                         }
-                        if (!iconMap.isEmpty()) {
-                            playerHomeIcons.put(uuid, iconMap);
-                        }
+                        if (!iconMap.isEmpty()) playerHomeIcons.put(u, iconMap);
                     }
                 } catch (Exception ignored) {}
             }
@@ -240,45 +322,41 @@ public class UtilityCommands implements CommandExecutor {
 
     public static void saveStates(StaffCore plugin) {
         if (plugin == null) return;
-        if (!plugin.getDataFolder().exists()) {
-            plugin.getDataFolder().mkdirs();
-        }
+        if (!plugin.getDataFolder().exists()) plugin.getDataFolder().mkdirs();
         File file = new File(plugin.getDataFolder(), "states.yml");
         FileConfiguration data = new YamlConfiguration();
 
         List<String> invList = new ArrayList<>();
-        for (UUID uuid : invinciblePlayers) {
-            invList.add(uuid.toString());
-        }
+        for (UUID uuid : invinciblePlayers) invList.add(uuid.toString());
         data.set("invincible", invList);
 
         List<String> flyList = new ArrayList<>();
-        for (UUID uuid : flyPlayers) {
-            flyList.add(uuid.toString());
-        }
+        for (UUID uuid : flyPlayers) flyList.add(uuid.toString());
         data.set("fly", flyList);
 
-        for (Map.Entry<UUID, Float> entry : walkSpeeds.entrySet()) {
-            data.set("walk-speed." + entry.getKey().toString(), entry.getValue());
-        }
+        for (Map.Entry<UUID, Float> entry : walkSpeeds.entrySet()) data.set("walk-speed." + entry.getKey().toString(), entry.getValue());
+        for (Map.Entry<UUID, Float> entry : flySpeeds.entrySet()) data.set("fly-speed." + entry.getKey().toString(), entry.getValue());
 
-        for (Map.Entry<UUID, Float> entry : flySpeeds.entrySet()) {
-            data.set("fly-speed." + entry.getKey().toString(), entry.getValue());
-        }
-
-        if (spawnLocation != null) {
-            serializeLocation(data, "spawn", spawnLocation);
-        }
+        if (spawnLocation != null) serializeLocation(data, "spawn", spawnLocation);
 
         data.set("warps", null);
-        for (Map.Entry<String, Location> entry : warps.entrySet()) {
-            serializeLocation(data, "warps." + entry.getKey().toLowerCase(), entry.getValue());
-        }
+        for (Map.Entry<String, Location> entry : warps.entrySet()) serializeLocation(data, "warps." + entry.getKey().toLowerCase(), entry.getValue());
 
         data.set("warp-icons", null);
-        for (Map.Entry<String, String> entry : warpIcons.entrySet()) {
-            data.set("warp-icons." + entry.getKey().toLowerCase(), entry.getValue());
+        for (Map.Entry<String, String> entry : warpIcons.entrySet()) data.set("warp-icons." + entry.getKey().toLowerCase(), entry.getValue());
+
+        data.set("warp-owners", null);
+        for (Map.Entry<String, UUID> entry : warpOwners.entrySet()) {
+            if (entry.getValue() != null && warps.containsKey(entry.getKey())) {
+                data.set("warp-owners." + entry.getKey().toLowerCase(), entry.getValue().toString());
+            }
         }
+
+        List<String> privList = new ArrayList<>();
+        for (String w : privateWarps) {
+            if (warps.containsKey(w)) privList.add(w.toLowerCase());
+        }
+        data.set("private-warps", privList);
 
         data.set("homes", null);
         for (Map.Entry<UUID, Map<String, Location>> userEntry : playerHomes.entrySet()) {
@@ -319,12 +397,7 @@ public class UtilityCommands implements CommandExecutor {
         if (worldName == null) return null;
         World world = Bukkit.getWorld(worldName);
         if (world == null) return null;
-        double x = sec.getDouble("x");
-        double y = sec.getDouble("y");
-        double z = sec.getDouble("z");
-        float yaw = (float) sec.getDouble("yaw");
-        float pitch = (float) sec.getDouble("pitch");
-        return new Location(world, x, y, z, yaw, pitch);
+        return new Location(world, sec.getDouble("x"), sec.getDouble("y"), sec.getDouble("z"), (float) sec.getDouble("yaw"), (float) sec.getDouble("pitch"));
     }
 
     public static ItemStack createGrayPane() {
@@ -359,25 +432,12 @@ public class UtilityCommands implements CommandExecutor {
             if (offhand != null) gui.setItem(5, offhand);
         } catch (Throwable ignored) {}
 
-        gui.setItem(6, pane);
-        gui.setItem(7, pane);
-        gui.setItem(8, pane);
-
-        for (int i = 9; i <= 17; i++) {
-            gui.setItem(i, pane);
-        }
-
-        for (int i = 9; i <= 35; i++) {
-            gui.setItem(18 + (i - 9), target.getInventory().getItem(i));
-        }
-
-        for (int i = 0; i <= 8; i++) {
-            gui.setItem(45 + i, target.getInventory().getItem(i));
-        }
+        for (int i = 6; i <= 17; i++) gui.setItem(i, pane);
+        for (int i = 9; i <= 35; i++) gui.setItem(18 + (i - 9), target.getInventory().getItem(i));
+        for (int i = 0; i <= 8; i++) gui.setItem(45 + i, target.getInventory().getItem(i));
 
         staff.openInventory(gui);
-        staff.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&aOpened inventory of &e" + target.getName() + "&a."));
+        staff.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aOpened inventory of &e" + target.getName() + "&a."));
     }
 
     public static void syncGuiToTarget(Inventory top, Player target) {
@@ -393,13 +453,8 @@ public class UtilityCommands implements CommandExecutor {
             m.invoke(target.getInventory(), top.getItem(5));
         } catch (Throwable ignored) {}
 
-        for (int i = 9; i <= 35; i++) {
-            target.getInventory().setItem(i, top.getItem(18 + (i - 9)));
-        }
-
-        for (int i = 0; i <= 8; i++) {
-            target.getInventory().setItem(i, top.getItem(45 + i));
-        }
+        for (int i = 9; i <= 35; i++) target.getInventory().setItem(i, top.getItem(18 + (i - 9)));
+        for (int i = 0; i <= 8; i++) target.getInventory().setItem(i, top.getItem(45 + i));
 
         target.updateInventory();
     }
@@ -408,16 +463,26 @@ public class UtilityCommands implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String cmd = command.getName().toLowerCase();
 
-        if (!(sender instanceof Player) && (cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair") || cmd.equals("clear")
-                || cmd.equals("setspawn") || cmd.equals("setwarp") || cmd.equals("sethome") || cmd.equals("delhome") || cmd.equals("home"))) {
-            if (args.length == 0 || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair")
-                    || cmd.equals("setspawn") || cmd.equals("setwarp") || cmd.equals("sethome") || cmd.equals("delhome") || cmd.equals("home")) {
+        if (!(sender instanceof Player)) {
+            if (cmd.equals("setspawn") || cmd.equals("setwarp") || cmd.equals("sethome") || cmd.equals("delhome") || cmd.equals("home")) {
+                sender.sendMessage(ChatColor.RED + "This command can only be executed by a player in-game!");
+                return true;
+            }
+            if ((cmd.equals("fly") || cmd.equals("speed") || cmd.equals("tphere") || cmd.equals("invsee") || cmd.equals("enchant") || cmd.equals("repair") || cmd.equals("clear")) && args.length == 0) {
                 sender.sendMessage(ChatColor.RED + "This command can only be executed by a player in-game!");
                 return true;
             }
         }
 
         switch (cmd) {
+            case "setspawn": return handleSetSpawn((Player) sender);
+            case "spawn": return handleSpawn(sender, args);
+            case "setwarp": return handleSetWarp((Player) sender, args);
+            case "delwarp": return handleDelWarp(sender, args);
+            case "warp": return handleWarp(sender, args);
+            case "sethome": return handleSetHome((Player) sender, args);
+            case "delhome": return handleDelHome((Player) sender, args);
+            case "home": return handleHome((Player) sender, args);
             case "gmc": return handleGamemode(sender, args, GameMode.CREATIVE, "Creative");
             case "gms": return handleGamemode(sender, args, GameMode.SURVIVAL, "Survival");
             case "gmsp": return handleGamemode(sender, args, GameMode.SPECTATOR, "Spectator");
@@ -445,14 +510,6 @@ public class UtilityCommands implements CommandExecutor {
             case "clear":
             case "ci":
             case "clearinventory": return handleClear(sender, args);
-            case "setspawn": return handleSetSpawn((Player) sender);
-            case "spawn": return handleSpawn(sender, args);
-            case "setwarp": return handleSetWarp((Player) sender, args);
-            case "delwarp": return handleDelWarp(sender, args);
-            case "warp": return handleWarp(sender, args);
-            case "sethome": return handleSetHome((Player) sender, args);
-            case "delhome": return handleDelHome((Player) sender, args);
-            case "home": return handleHome((Player) sender, args);
             default: return false;
         }
     }
@@ -461,9 +518,7 @@ public class UtilityCommands implements CommandExecutor {
         Location loc = player.getLocation().clone();
         spawnLocation = loc;
         if (loc.getWorld() != null) {
-            try {
-                loc.getWorld().setSpawnLocation(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
-            } catch (Throwable ignored) {}
+            try { loc.getWorld().setSpawnLocation(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()); } catch (Throwable ignored) {}
         }
         saveStates(plugin);
         player.sendMessage(plugin.getMessageManager().color(
@@ -503,8 +558,7 @@ public class UtilityCommands implements CommandExecutor {
             Player target = Bukkit.getPlayer(args[0]);
             if (target == null) {
                 sender.sendMessage(plugin.getMessageManager().color(
-                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found!")
-                                .replace("%target%", args[0])));
+                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found!").replace("%target%", args[0])));
                 return true;
             }
             target.teleport(dest);
@@ -534,6 +588,29 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
         String warpName = args[0].toLowerCase();
+
+        if (warps.containsKey(warpName)) {
+            UUID existingOwner = warpOwners.get(warpName);
+            if (existingOwner != null && !existingOwner.equals(player.getUniqueId())
+                    && !player.hasPermission("staffcore.command.setwarp.admin")
+                    && !player.hasPermission("staffcore.admin")
+                    && !player.isOp()) {
+                player.sendMessage(plugin.getMessageManager().color(
+                        "&cYou do not own the warp &e" + warpName + "&c! You cannot overwrite it."));
+                return true;
+            }
+        } else {
+            int maxWarps = getMaxWarps(player, plugin);
+            int currentWarps = getPlayerWarpCount(player.getUniqueId());
+            if (maxWarps != Integer.MAX_VALUE && maxWarps > 0 && currentWarps >= maxWarps) {
+                player.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.warp-limit-reached", "&cYou have reached the maximum limit of &e%max% &cwarps!")
+                                .replace("%max%", String.valueOf(maxWarps))));
+                return true;
+            }
+            warpOwners.put(warpName, player.getUniqueId());
+        }
+
         warps.put(warpName, player.getLocation().clone());
         if (!warpIcons.containsKey(warpName)) {
             warpIcons.put(warpName, "end");
@@ -551,8 +628,24 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
         String warpName = args[0].toLowerCase();
+
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            UUID owner = warpOwners.get(warpName);
+            if (owner != null && !owner.equals(player.getUniqueId())
+                    && !player.hasPermission("staffcore.command.delwarp.admin")
+                    && !player.hasPermission("staffcore.admin")
+                    && !player.isOp()) {
+                player.sendMessage(plugin.getMessageManager().color(
+                        "&cYou do not own the warp &e" + warpName + "&c! You can only delete your own warps."));
+                return true;
+            }
+        }
+
         if (warps.remove(warpName) != null) {
             warpIcons.remove(warpName);
+            warpOwners.remove(warpName);
+            privateWarps.remove(warpName);
             saveStates(plugin);
             sender.sendMessage(plugin.getMessageManager().color(
                     plugin.getConfig().getString("messages.delwarp-success", "&aSuccessfully deleted warp &e%warp%&a.")
@@ -566,7 +659,6 @@ public class UtilityCommands implements CommandExecutor {
     }
 
     private boolean handleWarp(CommandSender sender, String[] args) {
-        // If run by player without args, open the interactive GUI!
         if (args.length < 1) {
             if (sender instanceof Player) {
                 TeleportGui.openWarpGui(plugin, (Player) sender, 1);
@@ -582,6 +674,16 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         String warpName = args[0].toLowerCase();
+
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            if (!canAccessWarp(player, warpName)) {
+                player.sendMessage(plugin.getMessageManager().color(
+                        plugin.getConfig().getString("messages.warp-is-private", "&cThis warp is private!")));
+                return true;
+            }
+        }
+
         Location loc = warps.get(warpName);
         if (loc == null || loc.getWorld() == null) {
             sender.sendMessage(plugin.getMessageManager().color(
@@ -608,8 +710,7 @@ public class UtilityCommands implements CommandExecutor {
             Player target = Bukkit.getPlayer(args[1]);
             if (target == null) {
                 sender.sendMessage(plugin.getMessageManager().color(
-                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found!")
-                                .replace("%target%", args[1])));
+                        plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found!").replace("%target%", args[1])));
                 return true;
             }
             target.teleport(loc);
@@ -640,9 +741,8 @@ public class UtilityCommands implements CommandExecutor {
         UUID uuid = player.getUniqueId();
         Map<String, Location> homes = playerHomes.computeIfAbsent(uuid, k -> new TreeMap<>(String.CASE_INSENSITIVE_ORDER));
 
-        int maxHomes = plugin.getConfig().getInt("homes.max-homes", 5);
-        if (maxHomes > 0 && !homes.containsKey(homeName) && homes.size() >= maxHomes
-                && !player.hasPermission("staffcore.command.sethome.unlimited") && !player.isOp()) {
+        int maxHomes = getMaxHomes(player, plugin);
+        if (maxHomes != Integer.MAX_VALUE && maxHomes > 0 && !homes.containsKey(homeName) && homes.size() >= maxHomes) {
             player.sendMessage(plugin.getMessageManager().color(
                     plugin.getConfig().getString("messages.home-limit-reached", "&cYou have reached the maximum limit of &e%max% &chomes!")
                             .replace("%max%", String.valueOf(maxHomes))));
@@ -650,7 +750,9 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         homes.put(homeName, player.getLocation().clone());
-        if (getHomeIcon(uuid, homeName).equals("home")) {
+        if (!getHomeIcon(uuid, homeName).equals("home")) {
+            // keep existing custom icon
+        } else {
             setHomeIcon(uuid, homeName, "home");
         }
         saveStates(plugin);
@@ -685,7 +787,6 @@ public class UtilityCommands implements CommandExecutor {
     private boolean handleHome(Player player, String[] args) {
         Map<String, Location> homes = playerHomes.get(player.getUniqueId());
 
-        // When run without args, open interactive Homes GUI!
         if (args.length < 1) {
             TeleportGui.openHomeGui(plugin, player);
             return true;
@@ -724,9 +825,7 @@ public class UtilityCommands implements CommandExecutor {
                 int count = 0;
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     p.setGameMode(mode);
-                    if (!p.equals(sender)) {
-                        p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour game mode was set to &e" + modeName + "&a by staff."));
-                    }
+                    if (!p.equals(sender)) p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour game mode was set to &e" + modeName + "&a by staff."));
                     count++;
                 }
                 sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aSet game mode to &e" + modeName + "&a for &e" + count + " &aonline players."));
@@ -739,9 +838,7 @@ public class UtilityCommands implements CommandExecutor {
             }
             target.setGameMode(mode);
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aSet game mode to &e" + modeName + "&a for &e" + target.getName() + "&a."));
-            if (!target.equals(sender)) {
-                target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour game mode was set to &e" + modeName + "&a by staff."));
-            }
+            if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour game mode was set to &e" + modeName + "&a by staff."));
             return true;
         } else if (sender instanceof Player) {
             Player target = (Player) sender;
@@ -763,9 +860,7 @@ public class UtilityCommands implements CommandExecutor {
                 if (!state) target.setFlying(false);
                 setFlyEnabled(target.getUniqueId(), state);
                 String status = state ? "&2enabled" : "&4disabled";
-                if (!target.equals(sender)) {
-                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour flight mode was " + status + " &aby staff."));
-                }
+                if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour flight mode was " + status + " &aby staff."));
                 count++;
             }
             saveStates(plugin);
@@ -795,9 +890,7 @@ public class UtilityCommands implements CommandExecutor {
 
         String status = state ? "&2enabled" : "&4disabled";
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFlight mode " + status + " &afor &e" + target.getName() + "&a."));
-        if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour flight mode was " + status + " &aby staff."));
-        }
+        if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour flight mode was " + status + " &aby staff."));
         return true;
     }
 
@@ -812,7 +905,7 @@ public class UtilityCommands implements CommandExecutor {
             speedVal = Integer.parseInt(args[0]);
             if (speedVal < 1 || speedVal > 10) throw new NumberFormatException();
         } catch (NumberFormatException e) {
-            sender.sendMessage(ChatColor.RED + "Speed must be a number between 1 and 10! (1 is normal, 10 is max)");
+            sender.sendMessage(ChatColor.RED + "Speed must be between 1 and 10!");
             return true;
         }
 
@@ -832,8 +925,7 @@ public class UtilityCommands implements CommandExecutor {
                 count++;
             }
             saveStates(plugin);
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aSpeed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + count + " &aonline players."));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aSpeed set to &e" + speedVal + "&a for &e" + count + " &aonline players."));
             return true;
         }
 
@@ -855,14 +947,12 @@ public class UtilityCommands implements CommandExecutor {
             target.setFlySpeed(flySpeed);
             flySpeeds.put(target.getUniqueId(), flySpeed);
             saveStates(plugin);
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aFly speed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + target.getName() + "&a."));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFly speed set to &e" + speedVal + "&a for &e" + target.getName() + "&a."));
         } else {
             target.setWalkSpeed(walkSpeed);
             walkSpeeds.put(target.getUniqueId(), walkSpeed);
             saveStates(plugin);
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aWalk speed set to &e" + speedVal + (speedVal == 1 ? " (Normal)" : "") + "&a for &e" + target.getName() + "&a."));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aWalk speed set to &e" + speedVal + "&a for &e" + target.getName() + "&a."));
         }
         return true;
     }
@@ -875,9 +965,7 @@ public class UtilityCommands implements CommandExecutor {
                 boolean nowInvincible = !isInvincible(uuid);
                 setInvincible(uuid, nowInvincible);
                 String status = nowInvincible ? "&2enabled" : "&4disabled";
-                if (!target.equals(sender)) {
-                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour invincibility was " + status + " &aby staff."));
-                }
+                if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour invincibility was " + status + " &aby staff."));
                 count++;
             }
             saveStates(plugin);
@@ -906,9 +994,7 @@ public class UtilityCommands implements CommandExecutor {
 
         String status = nowInvincible ? "&2enabled" : "&4disabled";
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aInvincibility " + status + " &afor &e" + target.getName() + "&a."));
-        if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour invincibility was " + status + " &aby staff."));
-        }
+        if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour invincibility was " + status + " &aby staff."));
         return true;
     }
 
@@ -990,12 +1076,10 @@ public class UtilityCommands implements CommandExecutor {
             staff.sendMessage(ChatColor.RED + "Player " + args[0] + " not found or is offline!");
             return true;
         }
-
         if (target.equals(staff)) {
             staff.sendMessage(ChatColor.RED + "You cannot invsee yourself!");
             return true;
         }
-
         openInvsee(staff, target);
         return true;
     }
@@ -1024,7 +1108,7 @@ public class UtilityCommands implements CommandExecutor {
                 level = Integer.parseInt(args[1]);
                 if (level < 0 || level > 255) throw new NumberFormatException();
             } catch (NumberFormatException e) {
-                staff.sendMessage(ChatColor.RED + "Level must be an integer between 0 and 255! (Max 255)");
+                staff.sendMessage(ChatColor.RED + "Level must be between 0 and 255!");
                 return true;
             }
         } else {
@@ -1044,48 +1128,34 @@ public class UtilityCommands implements CommandExecutor {
     private Enchantment getEnchantmentByName(String name) {
         if (name == null) return null;
         String clean = name.toUpperCase().replace("MINECRAFT:", "").trim();
-
         Enchantment direct = Enchantment.getByName(clean);
         if (direct != null) return direct;
 
         switch (clean.toLowerCase()) {
             case "sharpness": return Enchantment.getByName("DAMAGE_ALL");
             case "smite": return Enchantment.getByName("DAMAGE_UNDEAD");
-            case "bane_of_arthropods":
-            case "baneofarthropods":
-            case "boa": return Enchantment.getByName("DAMAGE_ARTHROPODS");
+            case "bane_of_arthropods": case "baneofarthropods": case "boa": return Enchantment.getByName("DAMAGE_ARTHROPODS");
             case "knockback": return Enchantment.getByName("KNOCKBACK");
-            case "fire_aspect":
-            case "fireaspect": return Enchantment.getByName("FIRE_ASPECT");
+            case "fire_aspect": case "fireaspect": return Enchantment.getByName("FIRE_ASPECT");
             case "looting": return Enchantment.getByName("LOOT_BONUS_MOBS");
             case "efficiency": return Enchantment.getByName("DIG_SPEED");
-            case "silk_touch":
-            case "silktouch": return Enchantment.getByName("SILK_TOUCH");
+            case "silk_touch": case "silktouch": return Enchantment.getByName("SILK_TOUCH");
             case "unbreaking": return Enchantment.getByName("DURABILITY");
             case "fortune": return Enchantment.getByName("LOOT_BONUS_BLOCKS");
             case "power": return Enchantment.getByName("ARROW_DAMAGE");
             case "punch": return Enchantment.getByName("ARROW_KNOCKBACK");
             case "flame": return Enchantment.getByName("ARROW_FIRE");
             case "infinity": return Enchantment.getByName("ARROW_INFINITE");
-            case "protection":
-            case "prot": return Enchantment.getByName("PROTECTION_ENVIRONMENTAL");
-            case "fire_protection":
-            case "fireprotection":
-            case "fireprot": return Enchantment.getByName("PROTECTION_FIRE");
-            case "feather_falling":
-            case "featherfalling": return Enchantment.getByName("PROTECTION_FALL");
-            case "blast_protection":
-            case "blastprotection": return Enchantment.getByName("PROTECTION_EXPLOSIONS");
-            case "projectile_protection":
-            case "projprot": return Enchantment.getByName("PROTECTION_PROJECTILE");
+            case "protection": case "prot": return Enchantment.getByName("PROTECTION_ENVIRONMENTAL");
+            case "fire_protection": case "fireprotection": case "fireprot": return Enchantment.getByName("PROTECTION_FIRE");
+            case "feather_falling": case "featherfalling": return Enchantment.getByName("PROTECTION_FALL");
+            case "blast_protection": case "blastprotection": return Enchantment.getByName("PROTECTION_EXPLOSIONS");
+            case "projectile_protection": case "projprot": return Enchantment.getByName("PROTECTION_PROJECTILE");
             case "respiration": return Enchantment.getByName("OXYGEN");
-            case "aqua_affinity":
-            case "aquaaffinity": return Enchantment.getByName("WATER_WORKER");
+            case "aqua_affinity": case "aquaaffinity": return Enchantment.getByName("WATER_WORKER");
             case "thorns": return Enchantment.getByName("THORNS");
-            case "depth_strider":
-            case "depthstrider": return Enchantment.getByName("DEPTH_STRIDER");
-            case "luck_of_the_sea":
-            case "luckofthesea": return Enchantment.getByName("LUCK");
+            case "depth_strider": case "depthstrider": return Enchantment.getByName("DEPTH_STRIDER");
+            case "luck_of_the_sea": case "luckofthesea": return Enchantment.getByName("LUCK");
             case "lure": return Enchantment.getByName("LURE");
             default: break;
         }
@@ -1105,7 +1175,6 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         String serverName = args[1];
-
         if (args[0].equals("*")) {
             int count = 0;
             for (Player target : Bukkit.getOnlinePlayers()) {
@@ -1146,9 +1215,7 @@ public class UtilityCommands implements CommandExecutor {
             int count = 0;
             for (Player target : Bukkit.getOnlinePlayers()) {
                 healSinglePlayer(target);
-                if (!target.equals(sender)) {
-                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
-                }
+                if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
                 count++;
             }
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully healed &e" + count + " &aonline players."));
@@ -1171,9 +1238,7 @@ public class UtilityCommands implements CommandExecutor {
 
         healSinglePlayer(target);
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully healed &e" + target.getName() + "&a."));
-        if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
-        }
+        if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou have been fully healed by staff."));
         return true;
     }
 
@@ -1195,9 +1260,7 @@ public class UtilityCommands implements CommandExecutor {
                 target.setFoodLevel(20);
                 target.setSaturation(20.0f);
                 target.setExhaustion(0.0f);
-                if (!target.equals(sender)) {
-                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour appetite has been fully sated by staff."));
-                }
+                if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour appetite has been fully sated by staff."));
                 count++;
             }
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully fed &e" + count + " &aonline players."));
@@ -1221,11 +1284,8 @@ public class UtilityCommands implements CommandExecutor {
         target.setFoodLevel(20);
         target.setSaturation(20.0f);
         target.setExhaustion(0.0f);
-
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aFully fed &e" + target.getName() + "&a."));
-        if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour appetite has been fully sated by staff."));
-        }
+        if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour appetite has been fully sated by staff."));
         return true;
     }
 
@@ -1235,12 +1295,10 @@ public class UtilityCommands implements CommandExecutor {
             staff.sendMessage(ChatColor.RED + "You must be holding an item in your hand to repair!");
             return true;
         }
-
         if (item.getType().getMaxDurability() <= 0) {
             staff.sendMessage(ChatColor.RED + "This item does not have durability and cannot be repaired!");
             return true;
         }
-
         item.setDurability((short) 0);
         staff.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 "&aSuccessfully repaired &e" + item.getType().name().replace("_", " ") + "&a to full durability!"));
@@ -1311,22 +1369,14 @@ public class UtilityCommands implements CommandExecutor {
             for (Player target : Bukkit.getOnlinePlayers()) {
                 if (sender instanceof Player && target.equals(sender)) continue;
                 if (input.toLowerCase().startsWith("m:")) {
-                    String chatMessage = input.substring(2).trim();
-                    target.chat(chatMessage);
+                    target.chat(input.substring(2).trim());
                 } else {
-                    String commandToRun = input.startsWith("/") ? input.substring(1) : input;
-                    target.performCommand(commandToRun);
+                    target.performCommand(input.startsWith("/") ? input.substring(1) : input);
                 }
                 count++;
             }
-            if (input.toLowerCase().startsWith("m:")) {
-                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&aForced &e" + count + " &aplayers to chat: &f" + input.substring(2).trim()));
-            } else {
-                String commandToRun = input.startsWith("/") ? input.substring(1) : input;
-                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&aForced &e" + count + " &aplayers to execute: &f/" + commandToRun));
-            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&aForced &e" + count + " &aplayers to execute: &f" + input));
             return true;
         }
 
@@ -1337,15 +1387,13 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         if (input.toLowerCase().startsWith("m:")) {
-            String chatMessage = input.substring(2).trim();
-            target.chat(chatMessage);
+            target.chat(input.substring(2).trim());
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aForced &e" + target.getName() + " &ato chat: &f" + chatMessage));
+                    "&aForced &e" + target.getName() + " &ato chat: &f" + input.substring(2).trim()));
         } else {
-            String commandToRun = input.startsWith("/") ? input.substring(1) : input;
-            target.performCommand(commandToRun);
+            target.performCommand(input.startsWith("/") ? input.substring(1) : input);
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aForced &e" + target.getName() + " &ato execute: &f/" + commandToRun));
+                    "&aForced &e" + target.getName() + " &ato execute: &f" + input));
         }
         return true;
     }
@@ -1365,31 +1413,25 @@ public class UtilityCommands implements CommandExecutor {
         int amount = 1;
         if (args.length >= 3) {
             try {
-                amount = Integer.parseInt(args[2]);
-                if (amount < 1) amount = 1;
-                if (amount > 2304) amount = 2304;
+                amount = Math.max(1, Math.min(2304, Integer.parseInt(args[2])));
             } catch (NumberFormatException e) {
-                sender.sendMessage(ChatColor.RED + "Invalid amount '" + args[2] + "'! Must be a positive number.");
+                sender.sendMessage(ChatColor.RED + "Invalid amount '" + args[2] + "'!");
                 return true;
             }
         }
 
-        String rawName = ((Enum<?>) mat).name();
-        String itemName = rawName.toLowerCase().replace("legacy_", "").replace("_", " ");
+        String itemName = mat.name().toLowerCase().replace("legacy_", "").replace("_", " ");
 
         if (args[0].equals("*")) {
             int count = 0;
             for (Player target : Bukkit.getOnlinePlayers()) {
-                ItemStack stack = new ItemStack(mat, amount);
-                target.getInventory().addItem(stack);
+                target.getInventory().addItem(new ItemStack(mat, amount));
                 if (!target.equals(sender)) {
-                    target.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                            "&aYou received &e" + amount + "x " + itemName + " &afrom staff."));
+                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou received &e" + amount + "x " + itemName + " &afrom staff."));
                 }
                 count++;
             }
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aGave &e" + amount + "x " + itemName + " &ato &e" + count + " &aonline players."));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aGave &e" + amount + "x " + itemName + " &ato &e" + count + " &aonline players."));
             return true;
         }
 
@@ -1399,168 +1441,77 @@ public class UtilityCommands implements CommandExecutor {
             return true;
         }
 
-        ItemStack stack = new ItemStack(mat, amount);
-        target.getInventory().addItem(stack);
-        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&aGave &e" + amount + "x " + itemName + " &ato &e" + target.getName() + "&a."));
+        target.getInventory().addItem(new ItemStack(mat, amount));
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aGave &e" + amount + "x " + itemName + " &ato &e" + target.getName() + "&a."));
         if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aYou received &e" + amount + "x " + itemName + " &afrom staff."));
+            target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYou received &e" + amount + "x " + itemName + " &afrom staff."));
         }
         return true;
     }
 
     public static Material[] getAllRuntimeMaterials() {
         try {
-            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
-            Object[] constants = matClass.getEnumConstants();
-            if (constants != null && constants.length > 0) {
-                return (Material[]) constants;
-            }
+            Material[] constants = Material.class.getEnumConstants();
+            if (constants != null && constants.length > 0) return constants;
         } catch (Throwable ignored) {}
         return Material.values();
-    }
-
-    public static List<String> getAllGiveableItemNames() {
-        if (cachedGiveableItemNames != null && !cachedGiveableItemNames.isEmpty()) {
-            return cachedGiveableItemNames;
-        }
-        Set<String> names = new TreeSet<>();
-        Method isItemMethod = null;
-        try {
-            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
-            isItemMethod = matClass.getMethod("isItem");
-        } catch (Throwable ignored) {}
-
-        for (Material m : getAllRuntimeMaterials()) {
-            if (m == null) continue;
-            String rawName = ((Enum<?>) m).name();
-            if (rawName.equals("AIR") || rawName.endsWith("_AIR") || rawName.startsWith("LEGACY_")) {
-                continue;
-            }
-            if (isItemMethod != null) {
-                try {
-                    Boolean isItem = (Boolean) isItemMethod.invoke(m);
-                    if (isItem != null && !isItem) {
-                        continue;
-                    }
-                } catch (Throwable ignored) {}
-            }
-            names.add(rawName.toLowerCase());
-        }
-
-        names.addAll(Arrays.asList(
-                "gapple", "egap", "notch_apple", "totem", "pearl", "xpbottle", "cmdblock", "steak"
-        ));
-
-        cachedGiveableItemNames = new ArrayList<>(names);
-        return cachedGiveableItemNames;
     }
 
     public static Material matchEasyMaterial(String input) {
         if (input == null || input.trim().isEmpty()) return null;
         String clean = input.trim().toUpperCase().replace("MINECRAFT:", "").replace(" ", "_");
-        if (clean.contains("NETHERRITE")) {
-            clean = clean.replace("NETHERRITE", "NETHERITE");
-        }
+        if (clean.contains("NETHERRITE")) clean = clean.replace("NETHERRITE", "NETHERITE");
 
         try {
-            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
-            Method matchModern = matClass.getMethod("matchMaterial", String.class, boolean.class);
+            Method matchModern = Material.class.getMethod("matchMaterial", String.class, boolean.class);
             Material m = (Material) matchModern.invoke(null, clean, false);
-            if (m != null) return m;
-        } catch (Throwable ignored) {}
-
-        try {
-            Class<?> matClass = Class.forName("org.bukkit." + new String("Material"));
-            Method getModern = matClass.getMethod("getMaterial", String.class, boolean.class);
-            Material m = (Material) getModern.invoke(null, clean, false);
             if (m != null) return m;
         } catch (Throwable ignored) {}
 
         Material[] allMaterials = getAllRuntimeMaterials();
         for (Material m : allMaterials) {
-            String rawName = ((Enum<?>) m).name();
-            if (rawName.startsWith("LEGACY_")) continue;
-            if (rawName.equalsIgnoreCase(clean)) {
-                return m;
-            }
-        }
-
-        String compact = clean.toLowerCase().replace("_", "");
-        switch (compact) {
-            case "gap":
-            case "gapple":
-            case "goldenapple":
-                return Material.GOLDEN_APPLE;
-            case "egap":
-            case "notchapple":
-            case "enchantedgoldenapple":
-                return findRuntimeMaterial("ENCHANTED_GOLDEN_APPLE", "GOLDEN_APPLE");
-            case "totem":
-            case "totemofundying":
-                return findRuntimeMaterial("TOTEM_OF_UNDYING", "TOTEM");
-            case "pearl":
-            case "enderpearl":
-                return Material.ENDER_PEARL;
-            case "xpbottle":
-            case "expbottle":
-            case "experiencebottle":
-                return findRuntimeMaterial("EXPERIENCE_BOTTLE", "EXP_BOTTLE");
-            case "commandblock":
-            case "cmdblock":
-                return findRuntimeMaterial("COMMAND_BLOCK", "COMMAND");
-            case "steak":
-                return Material.COOKED_BEEF;
-            case "netheritesword": return findRuntimeMaterial("NETHERITE_SWORD", null);
-            case "netheritepick":
-            case "netheritepickaxe": return findRuntimeMaterial("NETHERITE_PICKAXE", null);
-            case "netheriteaxe": return findRuntimeMaterial("NETHERITE_AXE", null);
-            case "netheriteshovel": return findRuntimeMaterial("NETHERITE_SHOVEL", null);
-            case "netheritehoe": return findRuntimeMaterial("NETHERITE_HOE", null);
-            case "netheritehelmet": return findRuntimeMaterial("NETHERITE_HELMET", null);
-            case "netheritechestplate":
-            case "netheritechest": return findRuntimeMaterial("NETHERITE_CHESTPLATE", null);
-            case "netheriteleggings":
-            case "netheritelegs": return findRuntimeMaterial("NETHERITE_LEGGINGS", null);
-            case "netheriteboots": return findRuntimeMaterial("NETHERITE_BOOTS", null);
-            case "netheriteingot": return findRuntimeMaterial("NETHERITE_INGOT", null);
-            case "netheritescrap": return findRuntimeMaterial("NETHERITE_SCRAP", null);
-            case "netheriteblock": return findRuntimeMaterial("NETHERITE_BLOCK", null);
-            case "ancientdebris":
-            case "debris": return findRuntimeMaterial("ANCIENT_DEBRIS", null);
-            default: break;
+            if (m.name().startsWith("LEGACY_")) continue;
+            if (m.name().equalsIgnoreCase(clean)) return m;
         }
 
         Material direct = Material.matchMaterial(clean);
         if (direct != null) return direct;
 
-        try {
-            return Material.valueOf(clean);
-        } catch (IllegalArgumentException ignored) {}
+        try { return Material.valueOf(clean); } catch (IllegalArgumentException ignored) {}
+
+        String compact = clean.toLowerCase().replace("_", "");
+        switch (compact) {
+            case "gap": case "gapple": return Material.GOLDEN_APPLE;
+            case "egap": case "notchapple": return findRuntimeMaterial("ENCHANTED_GOLDEN_APPLE", "GOLDEN_APPLE");
+            case "totem": return findRuntimeMaterial("TOTEM_OF_UNDYING", "TOTEM");
+            case "pearl": return Material.ENDER_PEARL;
+            case "xpbottle": return findRuntimeMaterial("EXPERIENCE_BOTTLE", "EXP_BOTTLE");
+            case "commandblock": case "cmdblock": return findRuntimeMaterial("COMMAND_BLOCK", "COMMAND");
+            case "steak": return Material.COOKED_BEEF;
+            case "netheritesword": return findRuntimeMaterial("NETHERITE_SWORD", null);
+            case "netheritepick": case "netheritepickaxe": return findRuntimeMaterial("NETHERITE_PICKAXE", null);
+            case "netheriteaxe": return findRuntimeMaterial("NETHERITE_AXE", null);
+            case "netheriteingot": return findRuntimeMaterial("NETHERITE_INGOT", null);
+            case "ancientdebris": return findRuntimeMaterial("ANCIENT_DEBRIS", null);
+            default: break;
+        }
 
         for (Material m : allMaterials) {
-            String rawName = ((Enum<?>) m).name();
-            if (rawName.startsWith("LEGACY_")) continue;
-            if (rawName.replace("_", "").equalsIgnoreCase(compact)) return m;
-        }
-        for (Material m : allMaterials) {
-            String rawName = ((Enum<?>) m).name();
-            if (rawName.startsWith("LEGACY_")) continue;
-            if (rawName.toLowerCase().startsWith(clean.toLowerCase())) return m;
+            if (m.name().startsWith("LEGACY_")) continue;
+            if (m.name().replace("_", "").equalsIgnoreCase(compact) || m.name().toLowerCase().startsWith(clean.toLowerCase())) {
+                return m;
+            }
         }
         return null;
     }
 
     private static Material findRuntimeMaterial(String primary, String fallback) {
         for (Material m : getAllRuntimeMaterials()) {
-            String rawName = ((Enum<?>) m).name();
-            if (primary != null && rawName.equalsIgnoreCase(primary)) return m;
+            if (primary != null && m.name().equalsIgnoreCase(primary)) return m;
         }
         if (fallback != null) {
             for (Material m : getAllRuntimeMaterials()) {
-                String rawName = ((Enum<?>) m).name();
-                if (rawName.equalsIgnoreCase(fallback)) return m;
+                if (m.name().equalsIgnoreCase(fallback)) return m;
             }
         }
         return null;
@@ -1577,13 +1528,10 @@ public class UtilityCommands implements CommandExecutor {
             if (args[0].equals("*")) {
                 int count = 0;
                 for (Player target : Bukkit.getOnlinePlayers()) {
-                    for (PotionEffect pe : target.getActivePotionEffects()) {
-                        target.removePotionEffect(pe.getType());
-                    }
+                    for (PotionEffect pe : target.getActivePotionEffects()) target.removePotionEffect(pe.getType());
                     count++;
                 }
-                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&aCleared all potion effects for &e" + count + " &aonline players."));
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aCleared all potion effects for &e" + count + " &aonline players."));
                 return true;
             }
 
@@ -1592,11 +1540,8 @@ public class UtilityCommands implements CommandExecutor {
                 sender.sendMessage(ChatColor.RED + "Player " + args[0] + " not found!");
                 return true;
             }
-            for (PotionEffect pe : target.getActivePotionEffects()) {
-                target.removePotionEffect(pe.getType());
-            }
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aCleared all potion effects for &e" + target.getName() + "&a."));
+            for (PotionEffect pe : target.getActivePotionEffects()) target.removePotionEffect(pe.getType());
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aCleared all potion effects for &e" + target.getName() + "&a."));
             return true;
         }
 
@@ -1608,11 +1553,7 @@ public class UtilityCommands implements CommandExecutor {
 
         int seconds = 60;
         if (args.length >= 3) {
-            try {
-                seconds = Integer.parseInt(args[2]);
-                if (seconds < 0) seconds = 0;
-                if (seconds > 1000000) seconds = 1000000;
-            } catch (NumberFormatException e) {
+            try { seconds = Math.max(0, Math.min(1000000, Integer.parseInt(args[2]))); } catch (NumberFormatException e) {
                 sender.sendMessage(ChatColor.RED + "Duration must be a valid number of seconds!");
                 return true;
             }
@@ -1620,11 +1561,7 @@ public class UtilityCommands implements CommandExecutor {
 
         int level = 1;
         if (args.length >= 4) {
-            try {
-                level = Integer.parseInt(args[3]);
-                if (level < 1) level = 1;
-                if (level > 255) level = 255;
-            } catch (NumberFormatException e) {
+            try { level = Math.max(1, Math.min(255, Integer.parseInt(args[3]))); } catch (NumberFormatException e) {
                 sender.sendMessage(ChatColor.RED + "Level must be between 1 and 255!");
                 return true;
             }
@@ -1640,13 +1577,9 @@ public class UtilityCommands implements CommandExecutor {
                 if (seconds > 0) target.addPotionEffect(new PotionEffect(type, ticks, amplifier));
                 count++;
             }
-            if (seconds == 0) {
-                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&aRemoved &e" + type.getName() + " &afrom &e" + count + " &aonline players."));
-            } else {
-                sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        "&aApplied &e" + type.getName() + " " + level + " &a(" + seconds + "s) to &e" + count + " &aonline players."));
-            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    (seconds == 0) ? "&aRemoved &e" + type.getName() + " &afrom &e" + count + " &aonline players."
+                            : "&aApplied &e" + type.getName() + " " + level + " &a(" + seconds + "s) to &e" + count + " &aonline players."));
             return true;
         }
 
@@ -1658,12 +1591,10 @@ public class UtilityCommands implements CommandExecutor {
 
         target.removePotionEffect(type);
         if (seconds == 0) {
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aRemoved &e" + type.getName() + " &afrom &e" + target.getName() + "&a."));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aRemoved &e" + type.getName() + " &afrom &e" + target.getName() + "&a."));
         } else {
             target.addPotionEffect(new PotionEffect(type, ticks, amplifier));
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aApplied &e" + type.getName() + " " + level + " &a(" + seconds + "s) to &e" + target.getName() + "&a."));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aApplied &e" + type.getName() + " " + level + " &a(" + seconds + "s) to &e" + target.getName() + "&a."));
         }
         return true;
     }
@@ -1671,63 +1602,39 @@ public class UtilityCommands implements CommandExecutor {
     public static PotionEffectType getPotionEffectByName(String name) {
         if (name == null) return null;
         String clean = name.toUpperCase().replace("MINECRAFT:", "").trim();
-
         PotionEffectType direct = PotionEffectType.getByName(clean);
         if (direct != null) return direct;
 
         switch (clean.toLowerCase().replace("_", "")) {
-            case "speed":
-            case "swiftness": return PotionEffectType.SPEED;
-            case "slowness":
-            case "slow": return PotionEffectType.SLOW;
-            case "haste":
-            case "fastdigging": return PotionEffectType.FAST_DIGGING;
-            case "miningfatigue":
-            case "fatigue":
-            case "slowdigging": return PotionEffectType.SLOW_DIGGING;
-            case "strength":
-            case "increasedamage": return PotionEffectType.INCREASE_DAMAGE;
-            case "instanthealth":
-            case "heal":
-            case "health": return PotionEffectType.HEAL;
-            case "instantdamage":
-            case "harm":
-            case "damage": return PotionEffectType.HARM;
-            case "jump":
-            case "jumpboost": return PotionEffectType.JUMP;
-            case "nausea":
-            case "confusion": return PotionEffectType.CONFUSION;
-            case "regeneration":
-            case "regen": return PotionEffectType.REGENERATION;
-            case "resistance":
-            case "res":
-            case "damageresistance": return PotionEffectType.DAMAGE_RESISTANCE;
-            case "fireresistance":
-            case "fireres": return PotionEffectType.FIRE_RESISTANCE;
+            case "speed": case "swiftness": return PotionEffectType.SPEED;
+            case "slowness": case "slow": return PotionEffectType.SLOW;
+            case "haste": case "fastdigging": return PotionEffectType.FAST_DIGGING;
+            case "miningfatigue": case "fatigue": return PotionEffectType.SLOW_DIGGING;
+            case "strength": return PotionEffectType.INCREASE_DAMAGE;
+            case "instanthealth": case "heal": return PotionEffectType.HEAL;
+            case "instantdamage": case "harm": return PotionEffectType.HARM;
+            case "jump": case "jumpboost": return PotionEffectType.JUMP;
+            case "nausea": return PotionEffectType.CONFUSION;
+            case "regeneration": case "regen": return PotionEffectType.REGENERATION;
+            case "resistance": case "res": return PotionEffectType.DAMAGE_RESISTANCE;
+            case "fireresistance": case "fireres": return PotionEffectType.FIRE_RESISTANCE;
             case "waterbreathing": return PotionEffectType.WATER_BREATHING;
-            case "invisibility":
-            case "invis": return PotionEffectType.INVISIBILITY;
-            case "blindness":
-            case "blind": return PotionEffectType.BLINDNESS;
-            case "nightvision":
-            case "nv": return PotionEffectType.NIGHT_VISION;
+            case "invisibility": case "invis": return PotionEffectType.INVISIBILITY;
+            case "blindness": return PotionEffectType.BLINDNESS;
+            case "nightvision": case "nv": return PotionEffectType.NIGHT_VISION;
             case "hunger": return PotionEffectType.HUNGER;
-            case "weakness":
-            case "weak": return PotionEffectType.WEAKNESS;
+            case "weakness": return PotionEffectType.WEAKNESS;
             case "poison": return PotionEffectType.POISON;
             case "wither": return PotionEffectType.WITHER;
             case "healthboost": return PotionEffectType.HEALTH_BOOST;
-            case "absorption":
-            case "absorb": return PotionEffectType.ABSORPTION;
+            case "absorption": return PotionEffectType.ABSORPTION;
             case "saturation": return PotionEffectType.SATURATION;
             default: break;
         }
 
         for (PotionEffectType pet : PotionEffectType.values()) {
-            if (pet != null && pet.getName() != null) {
-                if (pet.getName().equalsIgnoreCase(clean) || pet.getName().replace("_", "").equalsIgnoreCase(clean.replace("_", ""))) {
-                    return pet;
-                }
+            if (pet != null && pet.getName() != null && (pet.getName().equalsIgnoreCase(clean) || pet.getName().replace("_", "").equalsIgnoreCase(clean.replace("_", "")))) {
+                return pet;
             }
         }
         return null;
@@ -1743,8 +1650,7 @@ public class UtilityCommands implements CommandExecutor {
                 }
             }
         }
-        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&aCleared &e" + removed + " &aground items across all worlds."));
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aCleared &e" + removed + " &aground items across all worlds."));
         return true;
     }
 
@@ -1753,13 +1659,10 @@ public class UtilityCommands implements CommandExecutor {
             int count = 0;
             for (Player target : Bukkit.getOnlinePlayers()) {
                 clearSinglePlayerInventory(target);
-                if (!target.equals(sender)) {
-                    target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour inventory was cleared by staff."));
-                }
+                if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour inventory was cleared by staff."));
                 count++;
             }
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aCleared inventories for &e" + count + " &aonline players."));
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aCleared inventories for &e" + count + " &aonline players."));
             return true;
         }
 
@@ -1778,12 +1681,8 @@ public class UtilityCommands implements CommandExecutor {
         }
 
         clearSinglePlayerInventory(target);
-        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&aCleared inventory of &e" + target.getName() + "&a."));
-        if (!target.equals(sender)) {
-            target.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&aYour inventory was cleared by staff."));
-        }
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aCleared inventory of &e" + target.getName() + "&a."));
+        if (!target.equals(sender)) target.sendMessage(ChatColor.translateAlternateColorCodes('&', "&aYour inventory was cleared by staff."));
         return true;
     }
 

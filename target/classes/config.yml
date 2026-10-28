@@ -10,11 +10,8 @@ prefix: "&8[&cStaffCore&8] &r"
 #   Configure proxy connection and /sendserver support
 # ========================================================
 bungeecord:
-  # Enable BungeeCord plugin messaging channel support
   enabled: true
-  # Identifier of this server instance on your Bungee/Velocity proxy
   server-name: "lobby"
-  # Fallback server to connect players to if needed
   fallback-server: "lobby"
 
 # ========================================================
@@ -22,8 +19,6 @@ bungeecord:
 #   Synchronize bans, mutes, and stats across your proxy
 # ========================================================
 database:
-  # Set to true to store and sync punishments via MySQL across all proxy sub-servers
-  # If false, StaffCore stores data in local punishments.yml
   mysql-enabled: false
   host: "localhost"
   port: 3306
@@ -32,17 +27,28 @@ database:
   password: "your_password_here"
   ssl: false
   pool-size: 10
-  # Interval in seconds to automatically sync punishment cache from MySQL
   sync-interval: 30
 
 # ========================================================
 #             bStats Metrics Telemetry
 # ========================================================
 bstats:
-  # Enable anonymous bStats telemetry
   enabled: true
-  # Your bStats Plugin ID from https://bstats.org
   plugin-id: 34872
+
+# ========================================================
+#               Player Homes Configuration
+# ========================================================
+homes:
+  # Base maximum homes for regular players (bypassed by staffcore.homes.10, staffcore.homes.15, staffcore.command.sethome.unlimited or op)
+  max-homes: 5
+
+# ========================================================
+#               Player Warps Configuration
+# ========================================================
+warps:
+  # Base maximum warps for regular players (bypassed by staffcore.warps.4, staffcore.warps.8, staffcore.warps.unlimited or op)
+  max-warps: 2
 
 # ========================================================
 #                  General Plugin Messages
@@ -72,28 +78,7 @@ messages:
   command-blocked-jailed: "&cYou cannot execute commands while jailed!"
   action-blocked-jailed: "&cYou cannot interact, throw items, or break blocks while jailed!"
 
-  # BungeeCord & Network Messages
-  bungee-disabled: "&cBungeeCord support is disabled in config.yml!"
-  sendserver-success: "&aSending &e%target% &ato server &e%server%&a..."
-  sendserver-failed: "&cFailed to send &e%target% &cto &e%server%&c."
-  sendserver-usage: "&cUsage: /sendserver <player|*> <server>"
-
-  # Utility Commands Messages
-  fly-enabled: "&aFly mode &2enabled &afor &e%target%&a."
-  fly-disabled: "&cFly mode &4disabled &cfor &e%target%&c."
-  speed-updated: "&aSpeed set to &e%speed% &afor &e%target%&a."
-  invincible-enabled: "&aInvincible mode &2enabled &afor &e%target%&a."
-  invincible-disabled: "&cInvincible mode &4disabled &cfor &e%target%&c."
-  gamemode-updated: "&aSet game mode to &e%gamemode% &afor &e%target%&a."
-  teleport-here: "&aTeleported &e%target% &ato your location."
-  teleport-all: "&aTeleported all players to your location."
-  enchant-success: "&aApplied &e%enchant% &alevel &e%level% &ato held item."
-  enchant-invalid: "&cInvalid enchantment or level! Levels can go up to 255."
-  heal-success: "&aFully healed &e%target%&a."
-  feed-success: "&aFully fed &e%target%&a."
-  repair-success: "&aSuccessfully repaired held item to full durability."
-  struck-success: "&aStruck lightning at &e%target%&a!"
-  sudo-success: "&aForced &e%target% &ato execute: &f%command%"
+  # Spawn, Warps & Homes Messages
   setspawn-success: "&aSuccessfully set the server spawn at your current location!"
   spawn-teleported: "&aTeleported to &espawn&a."
   spawn-not-set: "&cThe server spawn has not been set yet! Use &e/setspawn&c."
@@ -101,6 +86,8 @@ messages:
   delwarp-success: "&aSuccessfully deleted warp &e%warp%&a."
   warp-teleported: "&aTeleported to warp &e%warp%&a."
   warp-not-found: "&cWarp &e%warp% &cwas not found!"
+  warp-limit-reached: "&cYou have reached the maximum limit of &e%max% &cwarps!"
+  warp-is-private: "&cThis warp is private!"
   sethome-success: "&aSuccessfully set home &e%home% &aat your current location."
   delhome-success: "&aSuccessfully deleted home &e%home%&a."
   home-teleported: "&aTeleported to home &e%home%&a."
@@ -108,138 +95,102 @@ messages:
   no-homes-set: "&cYou do not have any homes set! Use &e/sethome <name> &cfirst."
   home-limit-reached: "&cYou have reached the maximum limit of &e%max% &chomes!"
 
-# Screen messages shown to kicked / banned players
+  # BungeeCord & Network Messages
+  bungee-disabled: "&cBungeeCord support is disabled in config.yml!"
+  sendserver-success: "&aSending &e%target% &ato server &e%server%&a..."
+  sendserver-failed: "&cFailed to send &e%target% &cto &e%server%&c."
+
+# ========================================================
+#                 Broadcast Notifications
+# ========================================================
+broadcasts:
+  silent:
+    ban: "&8[&cSilent&8] &7%staff% permanently banned &e%target% &7for: &f%reason%"
+    tempban: "&8[&cSilent&8] &7%staff% temporarily banned &e%target% &7for &e%duration% &7for: &f%reason%"
+    ipban: "&8[&cSilent&8] &7%staff% permanently IP-banned &e%target% &7for: &f%reason%"
+    tempipban: "&8[&cSilent&8] &7%staff% temp IP-banned &e%target% &7for &e%duration% &7for: &f%reason%"
+    mute: "&8[&cSilent&8] &7%staff% permanently muted &e%target% &7for: &f%reason%"
+    tempmute: "&8[&cSilent&8] &7%staff% temporarily muted &e%target% &7for &e%duration% &7for: &f%reason%"
+    warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%"
+    jail: "&8[&cSilent&8] &7%staff% permanently jailed &e%target% &7for: &f%reason%"
+    tempjail: "&8[&cSilent&8] &7%staff% temp-jailed &e%target% &7for &e%duration% &7for: &f%reason%"
+  public:
+    ban: "&c&lPUNISH &8» &f%target% &7was permanently banned by &f%staff% &7for: &e%reason%"
+    tempban: "&c&lPUNISH &8» &f%target% &7was banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    ipban: "&c&lPUNISH &8» &f%target% &7was permanently IP banned by &f%staff% &7for: &e%reason%"
+    tempipban: "&c&lPUNISH &8» &f%target% &7was temp IP banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    mute: "&c&lPUNISH &8» &f%target% &7was permanently muted by &f%staff% &7for: &e%reason%"
+    tempmute: "&c&lPUNISH &8» &f%target% &7was muted for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    warn: "&c&lPUNISH &8» &f%target% &7was warned by &f%staff% &7for: &e%reason%"
+    jail: "&c&lPUNISH &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%"
+    tempjail: "&c&lPUNISH &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%"
+
+# ========================================================
+#                    Ban Screen Layouts
+# ========================================================
 screens:
   permanent-ban:
     - "&c&lYOU ARE PERMANENTLY BANNED!"
     - ""
     - "&7Reason: &f%reason%"
-    - "&7Banned by: &f%staff%"
+    - "&7Banned By: &f%staff%"
     - ""
-    - "&7Appeal your ban on our Discord: &bdiscord.gg/yourserver"
-
+    - "&7Appeal at: &ediscord.gg/yourserver"
   temporary-ban:
     - "&c&lYOU ARE TEMPORARILY BANNED!"
     - ""
     - "&7Reason: &f%reason%"
-    - "&7Expires in: &e%remaining%"
-    - "&7Banned by: &f%staff%"
+    - "&7Remaining Time: &e%remaining%"
+    - "&7Banned By: &f%staff%"
     - ""
-    - "&7Appeal your ban on our Discord: &bdiscord.gg/yourserver"
-
+    - "&7Appeal at: &ediscord.gg/yourserver"
   permanent-ipban:
     - "&c&lYOUR IP ADDRESS IS PERMANENTLY BANNED!"
     - ""
     - "&7Reason: &f%reason%"
-    - "&7Banned by: &f%staff%"
+    - "&7Banned By: &f%staff%"
     - ""
-    - "&7Appeal on our Discord: &bdiscord.gg/yourserver"
-
+    - "&7Appeal at: &ediscord.gg/yourserver"
   temporary-ipban:
     - "&c&lYOUR IP ADDRESS IS TEMPORARILY BANNED!"
     - ""
     - "&7Reason: &f%reason%"
-    - "&7Expires in: &e%remaining%"
-    - "&7Banned by: &f%staff%"
+    - "&7Remaining Time: &e%remaining%"
+    - "&7Banned By: &f%staff%"
+    - ""
+    - "&7Appeal at: &ediscord.gg/yourserver"
 
-# Mute chat notifications
-mute:
-  permanent-chat:
+# ========================================================
+#                 Warning System Settings
+# ========================================================
+warning:
+  max-warnings: 3
+  received:
     - "&c&m--------------------------------------------------"
-    - "&cYou are permanently muted and cannot speak!"
+    - "&c&lYOU HAVE RECEIVED A WARNING!"
     - "&7Reason: &f%reason%"
-    - "&c&m--------------------------------------------------"
-  temporary-chat:
-    - "&c&m--------------------------------------------------"
-    - "&cYou are temporarily muted!"
-    - "&7Reason: &f%reason%"
-    - "&7Remaining time: &e%remaining%"
+    - "&7Warned by: &f%staff%"
+    - "&7Active Warnings: &e%count%&7/&c%max%"
+    - "&cReaching %max% warnings will result in an automatic ban!"
     - "&c&m--------------------------------------------------"
 
-# Jail notifications
+# ========================================================
+#                  Jail System Settings
+# ========================================================
 jail:
   permanent-chat:
     - "&c&m--------------------------------------------------"
-    - "&cYou have been permanently jailed in &e%jail%&c!"
+    - "&c&lYOU HAVE BEEN PERMANENTLY JAILED!"
+    - "&7Jail: &e%jail%"
     - "&7Reason: &f%reason%"
     - "&7Jailed by: &f%staff%"
     - "&c&m--------------------------------------------------"
   temporary-chat:
     - "&c&m--------------------------------------------------"
-    - "&cYou have been temporarily jailed in &e%jail%&c!"
+    - "&c&lYOU HAVE BEEN TEMPORARILY JAILED!"
+    - "&7Jail: &e%jail%"
     - "&7Reason: &f%reason%"
-    - "&7Remaining time: &e%remaining%"
+    - "&7Remaining Time: &e%remaining%"
     - "&7Jailed by: &f%staff%"
     - "&c&m--------------------------------------------------"
-  unjail-target: "&aYou have been released from jail!"
-
-# Warning system & auto-ban settings
-warning:
-  # Number of active warnings before a player is automatically permanently banned
-  # The final warning's reason will be used as the ban reason (set to 0 to disable auto-ban)
-  max-warnings: 3
-  received:
-    - "&6&m--------------------------------------------------"
-    - "&6&lWARNING RECEIVED! &e(%count%/%max%)"
-    - "&7You have been warned by &f%staff%&7!"
-    - "&7Reason: &f%reason%"
-    - "&7Please follow the server rules to avoid further punishment."
-    - "&6&m--------------------------------------------------"
-
-# Freeze system settings
-freeze:
-  title: "&c&lFROZEN"
-  subtitle: "&eYou are frozen and being inspected by a staff member"
-  chat-message:
-    - "&c&l================================================"
-    - "&c&lYOU HAVE BEEN FROZEN BY A STAFF MEMBER!"
-    - "&eDo NOT log out or close your game."
-    - "&eDisconnecting while frozen will result in a permanent ban."
-    - "&ePlease follow the instructions from the staff member in chat."
-    - "&c&l================================================"
-  unfrozen-target: "&aYou have been unfrozen by a staff member. Thank you for your cooperation!"
-  frozen-staff-notify: "&aYou froze &e%target%&a."
-  unfrozen-staff-notify: "&aYou unfroze &e%target%&a."
-  disconnect-alert: "&4&l[STAFF ALERT] &cPlayer &e%target% &cdisconnected while frozen!"
-
-# Staff Chat settings
-staffchat:
-  format: "&8[&cStaffChat&8] &e%player%: &f%message%"
-  switched-staff: "&aEntered Staff Chat. All your messages will be sent to staff."
-  switched-global: "&aReturned to Global Chat. Everyone can see your messages."
-
-# Vanish settings
-vanish:
-  enabled: "&aYou are now vanished! (Hidden from players, tab list, & server counter)"
-  disabled: "&cYou are no longer vanished! You are now visible to everyone."
-  staff-notify-vanish: "&8[&bVanish&8] &e%player% &7is now vanished."
-  staff-notify-unvanish: "&8[&bVanish&8] &e%player% &7is now visible."
-
-# Broadcast announcements for punishments
-broadcasts:
-  # Public broadcast sent to everyone when -s is NOT used
-  public:
-    ban: "&c&lPUNISH &8» &f%target% &7was permanently banned by &f%staff% &7for: &e%reason%"
-    tempban: "&c&lPUNISH &8» &f%target% &7was banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
-    ipban: "&c&lPUNISH &8» &f%target% &7was permanently IP-banned by &f%staff% &7for: &e%reason%"
-    tempipban: "&c&lPUNISH &8» &f%target% &7was IP-banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
-    mute: "&c&lPUNISH &8» &f%target% &7was permanently muted by &f%staff% &7for: &e%reason%"
-    tempmute: "&c&lPUNISH &8» &f%target% &7was muted for &e%duration% &7by &f%staff% &7for: &e%reason%"
-    jail: "&c&lPUNISH &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%"
-    tempjail: "&c&lPUNISH &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%"
-    warn: "&6&lWARNING &8» &f%target% &7was warned by &f%staff% &7for: &e%reason%"
-
-  # Silent broadcast sent ONLY to staff (staffcore.broadcast.silent) when -s IS used
-  silent:
-    ban: "&8[&cSilent&8] &7%staff% permanently banned &e%target% &7for: &f%reason%"
-    tempban: "&8[&cSilent&8] &7%staff% temp-banned &e%target% &7for &e%duration% &7for: &f%reason%"
-    ipban: "&8[&cSilent&8] &7%staff% permanently IP-banned &e%target% &7for: &f%reason%"
-    tempipban: "&8[&cSilent&8] &7%staff% temp IP-banned &e%target% &7for &e%duration% &7for: &f%reason%"
-    mute: "&8[&cSilent&8] &7%staff% permanently muted &e%target% &7for: &f%reason%"
-    tempmute: "&8[&cSilent&8] &7%staff% temp-muted &e%target% &7for &e%duration% &7for: &f%reason%"
-    jail: "&8[&cSilent&8] &7%staff% permanently jailed &e%target% &7for: &f%reason%"
-    tempjail: "&8[&cSilent&8] &7%staff% temp-jailed &e%target% &7for &e%duration% &7for: &f%reason%"
-    warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%" homes:
-homes:
-  # Maximum number of homes a regular player can set (0 = unlimited, bypassed by staffcore.command.sethome.unlimited)
-  max-homes: 5
+  unjail-target: "&aYou have been released from jail and returned to your previous position!"

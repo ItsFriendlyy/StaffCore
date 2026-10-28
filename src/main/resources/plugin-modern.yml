@@ -102,11 +102,11 @@ commands:
     usage: /spawn [player|*]
     permission: staffcore.command.spawn
   setwarp:
-    description: Creates or updates a server warp at your current location.
+    description: Creates or updates a server or personal warp.
     usage: /setwarp <warp_name>
     permission: staffcore.command.setwarp
   delwarp:
-    description: Deletes an existing server warp.
+    description: Deletes a warp.
     usage: /delwarp <warp_name>
     permission: staffcore.command.delwarp
   warp:
@@ -144,89 +144,91 @@ commands:
     usage: /gma [player|*]
     permission: staffcore.command.gamemode
   fly:
-    description: Toggles flight mode without changing game mode.
+    description: Toggles flight mode.
     usage: /fly [player|*]
     permission: staffcore.command.fly
   speed:
-    description: Sets walk or fly speed from 1 (normal) to 10 (fast).
+    description: Adjusts walking or flying speed from 1 to 10.
     usage: /speed <1-10> [player|*]
     permission: staffcore.command.speed
   invincible:
-    description: Makes a player invincible to all damage and hunger.
+    description: Toggles invulnerability and hunger prevention.
+    aliases: [godmode]
     usage: /invincible [player|*]
     permission: staffcore.command.invincible
   tphere:
-    description: Teleports a player to your current location.
+    description: Teleports player(s) directly to your position.
     usage: /tphere <player|*>
     permission: staffcore.command.teleport
   tpall:
-    description: Teleports all online players to you or to coordinates.
+    description: Teleports all players to you or specific coordinates.
     usage: /tpall [player | x y z]
     permission: staffcore.command.teleport
   invsee:
-    description: Inspects and edits player inventory, armor, and off-hand in one unified GUI.
+    description: Opens and live-syncs a target player inventory including armor.
     usage: /invsee <player>
     permission: staffcore.command.invsee
   enchant:
-    description: Adds an unsafe enchantment at any level (1-255) to the item in hand.
-    usage: /enchant <enchantment> [level (1-255)]
+    description: Applies unsafe enchantments up to level 255.
+    usage: /enchant <enchantment> [level]
     permission: staffcore.command.enchant
   sendserver:
-    description: Sends a player to another server via BungeeCord.
+    description: Forcibly sends a player or all players to another BungeeCord server.
     usage: /sendserver <player|*> <server>
     permission: staffcore.command.sendserver
   heal:
-    description: Fully restores health, hunger, saturation, and clears negative effects.
+    description: Restores health, hunger, saturation, and cures effects.
     usage: /heal [player|*]
     permission: staffcore.command.heal
   feed:
-    description: Fully satisfies hunger and restores saturation.
+    description: Satisfies hunger and restores saturation.
     usage: /feed [player|*]
     permission: staffcore.command.feed
   repair:
-    description: Restores the held item to full durability.
+    description: Restores held item durability to full.
+    aliases: [fix]
     usage: /repair
     permission: staffcore.command.repair
   struck:
-    description: Strikes lightning at a target player or crosshair location.
-    aliases: [strike]
+    description: Strikes lightning at target player or crosshair.
+    aliases: [strike, smite]
     usage: /struck [player|*]
     permission: staffcore.command.struck
   sudo:
-    description: Forces a player to run a command or send a chat message.
+    description: Forces player(s) to execute a command or send a chat message.
     usage: /sudo <player|*> <command | m:message>
     permission: staffcore.command.sudo
   give:
-    description: Gives an item to a player or all online players.
+    description: Gives items to a player with tab-completion support across all versions.
     usage: /give <player|*> <item> [amount]
     permission: staffcore.command.give
   effect:
-    description: Applies or clears potion effects on a player or all online players.
+    description: Applies or clears potion effects with custom duration and level.
     usage: /effect <player|*> <potion|clear> [seconds] [level]
     permission: staffcore.command.effect
   cleargrounditems:
-    description: Clears all dropped items on the ground across all worlds.
+    description: Cleans up all dropped item entities across all loaded worlds.
     aliases: [cleargrouditems, clearitems, clearlag]
     usage: /cleargrounditems
     permission: staffcore.command.cleargrounditems
   clear:
-    description: Clears a player's inventory, armor, and off-hand.
+    description: Clears inventory, armor, and off-hand items.
     aliases: [ci, clearinventory]
     usage: /clear [player|*]
     permission: staffcore.command.clear
 
 permissions:
   staffcore.command.ban:
-    description: Allows banning players.
+    description: Allows permanent banning.
     default: op
   staffcore.command.tempban:
-    description: Allows tempbanning players.
+    description: Allows temporary banning.
     default: op
   staffcore.command.ipban:
-    description: Allows IP banning players.
+    description: Allows permanent IP banning.
     default: op
   staffcore.command.tempipban:
-    description: Allows temp IP banning players.
+    description: Allows temporary IP banning.
     default: op
   staffcore.command.unban:
     description: Allows unbanning players.
@@ -235,10 +237,10 @@ permissions:
     description: Allows unbanning IP addresses.
     default: op
   staffcore.command.mute:
-    description: Allows muting players.
+    description: Allows permanently muting players.
     default: op
   staffcore.command.tempmute:
-    description: Allows temp-muting players.
+    description: Allows temporarily muting players.
     default: op
   staffcore.command.unmute:
     description: Allows unmuting players.
@@ -247,7 +249,7 @@ permissions:
     description: Allows warning players.
     default: op
   staffcore.command.setjail:
-    description: Allows creating and deleting jail locations.
+    description: Allows creating and removing jail locations.
     default: op
   staffcore.command.jail:
     description: Allows permanently jailing players.
@@ -256,16 +258,16 @@ permissions:
     description: Allows temporarily jailing players.
     default: op
   staffcore.command.unjail:
-    description: Allows releasing players from jail.
+    description: Allows releasing jailed players.
     default: op
   staffcore.command.freeze:
     description: Allows freezing players.
     default: op
   staffcore.command.check:
-    description: Allows opening the /check punishment & stats GUI.
+    description: Allows opening inspection GUI.
     default: op
   staffcore.command.chat:
-    description: Allows toggling staff chat.
+    description: Allows switching to staff chat.
     default: op
   staffcore.command.vanish:
     description: Allows toggling vanish.
@@ -280,10 +282,25 @@ permissions:
     description: Allows teleporting other players to spawn.
     default: op
   staffcore.command.setwarp:
-    description: Allows creating server warps.
-    default: op
+    description: Allows creating server or personal warps.
+    default: true
   staffcore.command.delwarp:
-    description: Allows deleting server warps.
+    description: Allows deleting personal warps.
+    default: true
+  staffcore.command.delwarp.admin:
+    description: Allows deleting any player or server warp.
+    default: op
+  staffcore.warps.admin:
+    description: Allows viewing and teleporting to private warps.
+    default: op
+  staffcore.warps.4:
+    description: Allows setting up to 4 warps.
+    default: false
+  staffcore.warps.8:
+    description: Allows setting up to 8 warps.
+    default: false
+  staffcore.warps.unlimited:
+    description: Allows setting an unlimited number of warps.
     default: op
   staffcore.command.warp:
     description: Allows teleporting to server warps.
@@ -294,6 +311,12 @@ permissions:
   staffcore.command.sethome:
     description: Allows setting personal homes.
     default: true
+  staffcore.homes.10:
+    description: Allows setting up to 10 personal homes.
+    default: false
+  staffcore.homes.15:
+    description: Allows setting up to 15 personal homes.
+    default: false
   staffcore.command.sethome.unlimited:
     description: Allows setting an unlimited number of homes.
     default: op
@@ -305,6 +328,9 @@ permissions:
     default: true
   staffcore.command.gamemode:
     description: Allows changing game modes (/gmc, /gms, /gmsp, /gma).
+    default: op
+  staffcore.command.gamemode.others:
+    description: Allows changing other players' game modes.
     default: op
   staffcore.command.fly:
     description: Allows toggling fly mode.
