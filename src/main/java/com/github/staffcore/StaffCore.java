@@ -119,9 +119,9 @@ public final class StaffCore extends JavaPlugin {
 
         // Moderation & Punishment Commands (including Jail commands)
         this.punishExecutor = new PunishCommands(this);
-        String[] punishCmds = {
+       String[] punishCmds = {
             "ban", "tempban", "ipban", "tempipban", "unban", "unbanip",
-            "mute", "tempmute", "unmute", "warn",
+            "mute", "tempmute", "unmute", "warn", "kick",
             "setjail", "deljail", "jail", "tempjail", "unjail"
         };
         for (String cmdName : punishCmds) {

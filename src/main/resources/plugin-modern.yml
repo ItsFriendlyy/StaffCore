@@ -51,6 +51,10 @@ commands:
     description: Warns a player.
     usage: /warn <player> [reason] [-s]
     permission: staffcore.command.warn
+  kick:
+    description: Kicks a player from the server.
+    usage: /kick <player> [reason] [-s]
+    permission: staffcore.command.kick
   setjail:
     description: Sets a jail spawn location at your current position.
     usage: /setjail <jail_name>
@@ -429,4 +433,10 @@ permissions:
     default: op
   staffcore.phase:
     description: Allows toggling phase mode
+    default: op
+    staffcore.command.kick:
+    description: Allows kicking players from the server
+    default: op
+  staffcore.bypass.kick:
+    description: Exempts players from being kicked
     default: op

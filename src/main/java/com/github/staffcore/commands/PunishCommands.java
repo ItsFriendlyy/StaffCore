@@ -48,6 +48,8 @@ public class PunishCommands implements CommandExecutor {
                 return handleUnmute(sender, args);
             case "warn":
                 return handleWarn(sender, args);
+            case "kick":
+                return handleKick(sender, args);
             case "setjail":
                 return handleSetJail(sender, args);
             case "deljail":
@@ -332,6 +334,37 @@ public class PunishCommands implements CommandExecutor {
         return true;
     }
 
+    private boolean handleKick(CommandSender sender, String[] args) {
+        if (args.length < 1) {
+            sender.sendMessage(plugin.getMessageManager().color("&cUsage: /kick <player> [reason] [-s]"));
+            return true;
+        }
+
+        String targetInput = args[0];
+        Player target = Bukkit.getPlayer(targetInput);
+        if (target == null || !target.isOnline()) {
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.player-not-found", "&cPlayer &e%target% &cwas not found or is offline!")
+                            .replace("%target%", targetInput)));
+            return true;
+        }
+
+        if (sender instanceof Player && target.equals(sender)) {
+            sender.sendMessage(plugin.getMessageManager().getPrefixedMessage("messages.cannot-punish-self"));
+            return true;
+        }
+
+        if (target.hasPermission("staffcore.bypass.kick") || target.hasPermission("staffcore.bypass") || target.isOp()) {
+            sender.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("messages.cannot-punish-exempt", "&cCannot punish exempt player!")
+                            .replace("%target%", target.getName())));
+            return true;
+        }
+
+        ParsedReason parsed = parseSilentAndReason(args, 1);
+        plugin.getPunishmentManager().kickPlayer(target, sender.getName(), parsed.reason, parsed.silent);
+        return true;
+    }
     private boolean handleWarn(CommandSender sender, String[] args) {
         if (args.length < 1) {
             sender.sendMessage(plugin.getMessageManager().color("&cUsage: /warn <player> [reason] [-s]"));

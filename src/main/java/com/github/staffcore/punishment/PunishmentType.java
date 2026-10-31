@@ -9,5 +9,6 @@ public enum PunishmentType {
     TEMP_MUTE,
     JAIL,
     TEMP_JAIL,
-    WARN
+    WARN,
+    KICK
 }

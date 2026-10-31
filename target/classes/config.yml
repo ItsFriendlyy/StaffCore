@@ -114,6 +114,7 @@ broadcasts:
     warn: "&8[&cSilent&8] &7%staff% warned &e%target% &7for: &f%reason%"
     jail: "&8[&cSilent&8] &7%staff% permanently jailed &e%target% &7for: &f%reason%"
     tempjail: "&8[&cSilent&8] &7%staff% temp-jailed &e%target% &7for &e%duration% &7for: &f%reason%"
+    kick: "&c&lPUNISH &8» &f%target% &7was kicked by &f%staff% &7for: &e%reason%"
   public:
     ban: "&c&lPUNISH &8» &f%target% &7was permanently banned by &f%staff% &7for: &e%reason%"
     tempban: "&c&lPUNISH &8» &f%target% &7was banned for &e%duration% &7by &f%staff% &7for: &e%reason%"
@@ -124,6 +125,7 @@ broadcasts:
     warn: "&c&lPUNISH &8» &f%target% &7was warned by &f%staff% &7for: &e%reason%"
     jail: "&c&lPUNISH &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%"
     tempjail: "&c&lPUNISH &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%"
+    kick: "&8[&cSilent&8] &7%staff% kicked &e%target% &7for: &f%reason%"
 
 # ========================================================
 #                    Ban Screen Layouts
@@ -159,6 +161,11 @@ screens:
     - "&7Banned By: &f%staff%"
     - ""
     - "&7Appeal at: &ediscord.gg/yourserver"
+  kick:
+    - "&c&lYOU HAVE BEEN KICKED FROM THE SERVER"
+    - ""
+    - "&7Reason: &f%reason%"
+    - "&7Kicked by: &f%staff%"
 
 # ========================================================
 #                 Warning System Settings

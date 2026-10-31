@@ -346,9 +346,9 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 13. All single-durationless punish commands (NO wildcard *): /ban, /ipban, /ban-ip, /banip, /mute, /warn
+// 13. All single-durationless punish commands: /ban, /ipban, /ban-ip, /banip, /mute, /warn, /kick
         if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("ban-ip") || cmd.equals("banip") ||
-            cmd.equals("mute") || cmd.equals("warn")) {
+            cmd.equals("mute") || cmd.equals("warn") || cmd.equals("kick")) {
             if (args.length == 1) {
                 return getPlayerNameCompletions(args[0], false);
             } else if (args.length == 2) {

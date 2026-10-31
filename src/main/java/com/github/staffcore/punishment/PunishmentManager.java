@@ -708,6 +708,35 @@ public class PunishmentManager {
         return count;
     }
 
+    public void kickPlayer(Player target, String staffName, String reason, boolean silent) {
+        if (target == null || !target.isOnline()) return;
+
+        UUID targetUUID = target.getUniqueId();
+        String targetName = target.getName();
+        String ip = (target.getAddress() != null && target.getAddress().getAddress() != null)
+                ? target.getAddress().getAddress().getHostAddress() : getLastKnownIp(targetUUID);
+
+        Punishment p = new Punishment(UUID.randomUUID(), targetUUID, targetName, ip != null ? ip : "",
+                staffName, PunishmentType.KICK, reason, System.currentTimeMillis(), -1, -1, false);
+        punishments.add(p);
+        saveData();
+
+        broadcastPunishment(p, silent);
+
+        final String kickMsg = getBanKickMessage(p);
+        Bukkit.getScheduler().runTask(plugin, () -> target.kickPlayer(kickMsg));
+    }
+
+    public int getKickCount(UUID targetUUID) {
+        if (targetUUID == null) return 0;
+        int count = 0;
+        for (Punishment p : punishments) {
+            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) && p.getType() == PunishmentType.KICK) {
+                count++;
+            }
+        }
+        return count;
+    }
     public int getWarnCount(UUID targetUUID) {
         int count = 0;
         for (Punishment p : punishments) {
@@ -786,19 +815,30 @@ public class PunishmentManager {
         if (p.getType() == PunishmentType.TEMPBAN) screenKey = "screens.temporary-ban";
         else if (p.getType() == PunishmentType.IP_BAN) screenKey = "screens.permanent-ipban";
         else if (p.getType() == PunishmentType.TEMP_IP_BAN) screenKey = "screens.temporary-ipban";
+        else if (p.getType() == PunishmentType.KICK) screenKey = "screens.kick";
 
         List<String> lines = plugin.getMessageManager().getMessageList(screenKey);
+        if ((lines == null || lines.isEmpty()) && p.getType() == PunishmentType.KICK) {
+            lines = Arrays.asList(
+                    "&c&lYOU HAVE BEEN KICKED FROM THE SERVER",
+                    "",
+                    "&7Reason: &f%reason%",
+                    "&7Kicked by: &f%staff%"
+            );
+        }
         String remaining = p.getDuration() > 0 ? TimeUtil.formatRemaining(p.getExpireTime()) : "Permanent";
 
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i)
-                    .replace("%target%", p.getTargetName())
-                    .replace("%staff%", p.getStaffName())
-                    .replace("%reason%", p.getReason())
-                    .replace("%remaining%", remaining);
-            sb.append(line);
-            if (i < lines.size() - 1) sb.append("\n");
+        if (lines != null) {
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i)
+                        .replace("%target%", p.getTargetName())
+                        .replace("%staff%", p.getStaffName())
+                        .replace("%reason%", p.getReason())
+                        .replace("%remaining%", remaining);
+                sb.append(line);
+                if (i < lines.size() - 1) sb.append("\n");
+            }
         }
         return sb.toString();
     }
@@ -810,7 +850,9 @@ public class PunishmentManager {
             String formatKey = "broadcasts.silent." + p.getType().name().toLowerCase().replace("_", "");
             String msg = plugin.getConfig().getString(formatKey);
             if (msg == null) {
-                if (p.getType() == PunishmentType.JAIL) {
+                if (p.getType() == PunishmentType.KICK) {
+                    msg = "&8[&cSilent&8] &7%staff% kicked &e%target% &7for: &f%reason%";
+                } else if (p.getType() == PunishmentType.JAIL) {
                     msg = "&8[&cSilent&8] &7%staff% permanently jailed &e%target% &7for: &f%reason%";
                 } else if (p.getType() == PunishmentType.TEMP_JAIL) {
                     msg = "&8[&cSilent&8] &7%staff% temp-jailed &e%target% &7for &e%duration% &7for: &f%reason%";
@@ -836,7 +878,9 @@ public class PunishmentManager {
             String formatKey = "broadcasts.public." + p.getType().name().toLowerCase().replace("_", "");
             String msg = plugin.getConfig().getString(formatKey);
             if (msg == null) {
-                if (p.getType() == PunishmentType.JAIL) {
+                if (p.getType() == PunishmentType.KICK) {
+                    msg = "&c&lPUNISH &8» &f%target% &7was kicked by &f%staff% &7for: &e%reason%";
+                } else if (p.getType() == PunishmentType.JAIL) {
                     msg = "&c&lPUNISH &8» &f%target% &7was permanently jailed by &f%staff% &7for: &e%reason%";
                 } else if (p.getType() == PunishmentType.TEMP_JAIL) {
                     msg = "&c&lPUNISH &8» &f%target% &7was jailed for &e%duration% &7by &f%staff% &7for: &e%reason%";
