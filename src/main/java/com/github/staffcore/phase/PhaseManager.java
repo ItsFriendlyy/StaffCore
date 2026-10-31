@@ -1,32 +1,32 @@
 package com.github.staffcore.phase;
 
 import com.github.staffcore.StaffCore;
-import com.github.staffcore.commands.UtilityCommands;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
-import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PhaseManager {
 
     private final StaffCore plugin;
-    private final Set<UUID> phasedPlayers = ConcurrentHashMap.newKeySet();
-    // Player UUID -> Set of BlockPos currently ghosted as AIR for that player
-    private final Map<UUID, Set<BlockPos>> activeGhostBlocks = new ConcurrentHashMap<>();
+    public static final String PHASE_INV_PREFIX = ChatColor.DARK_GRAY + "My Inventory: " + ChatColor.DARK_RED;
+    private final Map<UUID, GameMode> previousGameModes = new ConcurrentHashMap<>();
 
     public PhaseManager(StaffCore plugin) {
         this.plugin = plugin;
     }
 
     public boolean isPhased(UUID uuid) {
-        return phasedPlayers.contains(uuid);
+        return previousGameModes.containsKey(uuid);
     }
 
     public boolean togglePhase(Player player) {
@@ -43,219 +43,140 @@ public class PhaseManager {
     public void setPhased(Player player, boolean phased) {
         UUID uuid = player.getUniqueId();
         if (phased) {
-            phasedPlayers.add(uuid);
+            GameMode current = player.getGameMode();
+            if (current == GameMode.SPECTATOR) {
+                current = GameMode.SURVIVAL;
+            }
+            previousGameModes.put(uuid, current);
 
-            // Enable flight so player can navigate in 3D through walls/floors while in Survival/Creative
-            player.setAllowFlight(true);
-            player.setFlying(true);
+            // Activate spectator mode for genuine vanilla noclip through blocks
+            player.setGameMode(GameMode.SPECTATOR);
 
-            // Create initial ghost air bubble around the player
-            updateGhostBlocks(player, player.getLocation());
-
-            player.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("phase.enabled", "&8[&cStaffCore&8] &aPhase mode &2enabled&a! Smooth block pass-through active in &e" + player.getGameMode().name() + "&a mode.")));
-        } else {
-            phasedPlayers.remove(uuid);
-
-            // Restore all ghost blocks for this player back to solid blocks
-            clearGhostBlocks(player);
-
-            // If player ended up inside a solid block, safely step them into adjacent air
-            ejectFromSolidBlock(player);
-
-            // Restore flight settings if in Survival and /fly wasn't enabled
-            if (player.getGameMode() == GameMode.SURVIVAL || player.getGameMode() == GameMode.ADVENTURE) {
-                if (!UtilityCommands.isFlyEnabled(uuid)) {
-                    player.setFlying(false);
-                    player.setAllowFlight(false);
-                }
+            // Automatically vanish so normal players never see your floating head
+            if (!plugin.getVanishManager().isVanished(uuid)) {
+                plugin.getVanishManager().setVanished(player, true);
             }
 
             player.sendMessage(plugin.getMessageManager().color(
-                    plugin.getConfig().getString("phase.disabled", "&8[&cStaffCore&8] &cPhase mode &4disabled&c.")));
+                    plugin.getConfig().getString("phase.enabled", "&8[&cStaffCore&8] &aPhase mode &2enabled&a! Smooth spectator noclip active.")));
+            player.sendMessage(plugin.getMessageManager().color(
+                    "&7Tip: Type &e/phase inv &7to view/manage your survival items while phasing!"));
+        } else {
+            GameMode prev = previousGameModes.remove(uuid);
+            if (prev == null || prev == GameMode.SPECTATOR) {
+                prev = GameMode.SURVIVAL;
+            }
+            player.setGameMode(prev);
+
+            player.sendMessage(plugin.getMessageManager().color(
+                    plugin.getConfig().getString("phase.disabled", "&8[&cStaffCore&8] &cPhase mode &4disabled&c. Returned to &e" + prev.name() + "&c with your items ready!")));
         }
     }
 
     /**
-     * Updates the dynamic ghost air bubble around the player as they move through blocks.
+     * Opens an interactive GUI allowing you to view and manage your survival/creative items & armor while in spectator phase.
      */
-    public void updateGhostBlocks(Player player, Location loc) {
-        if (!isPhased(player.getUniqueId()) || loc == null) return;
+    public void openSurvivalInventory(Player player) {
+        Inventory gui = Bukkit.createInventory(player, 54, PHASE_INV_PREFIX + player.getName());
+        ItemStack pane = createGrayPane();
 
-        World world = loc.getWorld();
-        if (world == null) return;
+        // Row 0: Armor (Slots 0 to 3: Helmet, Chestplate, Leggings, Boots)
+        gui.setItem(0, player.getInventory().getHelmet());
+        gui.setItem(1, player.getInventory().getChestplate());
+        gui.setItem(2, player.getInventory().getLeggings());
+        gui.setItem(3, player.getInventory().getBoots());
 
-        int px = loc.getBlockX();
-        int py = loc.getBlockY();
-        int pz = loc.getBlockZ();
+        // Slot 4: Divider
+        gui.setItem(4, pane);
 
-        Set<BlockPos> newBox = new HashSet<>();
-
-        // 3x4x3 box around player body (from feet to head + 1 above)
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 2; dy++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    int bx = px + dx;
-                    int by = py + dy;
-                    int bz = pz + dz;
-
-                    if (by < 0 || by > world.getMaxHeight()) continue;
-
-                    Block b = world.getBlockAt(bx, by, bz);
-                    Material mat = b.getType();
-
-                    if (mat != Material.AIR && !mat.name().endsWith("_AIR")) {
-                        try {
-                            if (mat.isSolid()) {
-                                newBox.add(new BlockPos(world.getName(), bx, by, bz));
-                            }
-                        } catch (Throwable t) {
-                            newBox.add(new BlockPos(world.getName(), bx, by, bz));
-                        }
-                    }
-                }
-            }
-        }
-
-        Set<BlockPos> current = activeGhostBlocks.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
-
-        // 1. Restore blocks that left the player's bubble
-        for (BlockPos oldPos : current) {
-            if (!newBox.contains(oldPos)) {
-                Block b = oldPos.getBlock();
-                if (b != null) {
-                    restoreBlock(player, b);
-                }
-            }
-        }
-
-        // 2. Ghost new solid blocks as AIR for the player's client (removes client collision)
-        for (BlockPos newPos : newBox) {
-            if (!current.contains(newPos)) {
-                sendAir(player, newPos.toLocation());
-            }
-        }
-
-        current.clear();
-        current.addAll(newBox);
-    }
-
-    public void clearGhostBlocks(Player player) {
-        Set<BlockPos> current = activeGhostBlocks.remove(player.getUniqueId());
-        if (current != null && !current.isEmpty()) {
-            for (BlockPos pos : current) {
-                Block b = pos.getBlock();
-                if (b != null) {
-                    restoreBlock(player, b);
-                }
-            }
-        }
-    }
-
-    private void ejectFromSolidBlock(Player player) {
-        Location loc = player.getLocation();
-        Block feet = loc.getBlock();
-        Block head = loc.clone().add(0, 1, 0).getBlock();
-
-        if (feet.getType().isSolid() || head.getType().isSolid()) {
-            for (int radius = 1; radius <= 4; radius++) {
-                for (int dx = -radius; dx <= radius; dx++) {
-                    for (int dy = -1; dy <= radius; dy++) {
-                        for (int dz = -radius; dz <= radius; dz++) {
-                            Location check = loc.clone().add(dx, dy, dz);
-                            Block b1 = check.getBlock();
-                            Block b2 = check.clone().add(0, 1, 0).getBlock();
-                            if (!b1.getType().isSolid() && !b2.getType().isSolid()) {
-                                check.setYaw(player.getLocation().getYaw());
-                                check.setPitch(player.getLocation().getPitch());
-                                player.teleport(check.add(0.5, 0.0, 0.5));
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private void sendAir(Player player, Location loc) {
-        if (player == null || !player.isOnline() || loc == null) return;
+        // Slot 5: Off-Hand item
         try {
-            player.sendBlockChange(loc, Material.AIR, (byte) 0);
+            Method m = player.getInventory().getClass().getMethod("getItemInOffHand");
+            ItemStack offhand = (ItemStack) m.invoke(player.getInventory());
+            if (offhand != null) {
+                gui.setItem(5, offhand);
+            }
         } catch (Throwable ignored) {}
+
+        // Slots 6 to 17: Divider row
+        for (int i = 6; i <= 17; i++) {
+            gui.setItem(i, pane);
+        }
+
+        // Rows 2, 3, 4: Main Inventory (Slots 18 to 44 -> inventory slots 9 to 35)
+        for (int i = 9; i <= 35; i++) {
+            gui.setItem(18 + (i - 9), player.getInventory().getItem(i));
+        }
+
+        // Row 5: Hotbar (Slots 45 to 53 -> inventory slots 0 to 8)
+        for (int i = 0; i <= 8; i++) {
+            gui.setItem(45 + i, player.getInventory().getItem(i));
+        }
+
+        player.openInventory(gui);
     }
 
-    @SuppressWarnings("deprecation")
-    private void restoreBlock(Player player, Block block) {
-        if (player == null || !player.isOnline() || block == null) return;
+    public void syncGuiToInventory(Inventory top, Player player) {
+        if (top == null || player == null) return;
+
+        // Armor (Slots 0 to 3)
+        player.getInventory().setHelmet(top.getItem(0));
+        player.getInventory().setChestplate(top.getItem(1));
+        player.getInventory().setLeggings(top.getItem(2));
+        player.getInventory().setBoots(top.getItem(3));
+
+        // Off-hand (Slot 5)
         try {
-            // 1.13+ getBlockData() via dynamic reflection
-            Method getBlockData = Block.class.getMethod("getBlockData");
-            Object blockData = getBlockData.invoke(block);
-            Method sendBlockData = Player.class.getMethod("sendBlockChange", Location.class, Class.forName("org.bukkit.block.data.BlockData"));
-            sendBlockData.invoke(player, block.getLocation(), blockData);
-        } catch (Throwable t) {
-            // 1.8.8 - 1.12.2 fallback
-            try {
-                player.sendBlockChange(block.getLocation(), block.getType(), block.getData());
-            } catch (Throwable ignored) {}
+            Method m = player.getInventory().getClass().getMethod("setItemInOffHand", ItemStack.class);
+            m.invoke(player.getInventory(), top.getItem(5));
+        } catch (Throwable ignored) {}
+
+        // Main inventory (Slots 18-44 -> slots 9-35)
+        for (int i = 9; i <= 35; i++) {
+            player.getInventory().setItem(i, top.getItem(18 + (i - 9)));
         }
+
+        // Hotbar (Slots 45-53 -> slots 0-8)
+        for (int i = 0; i <= 8; i++) {
+            player.getInventory().setItem(i, top.getItem(45 + i));
+        }
+    }
+
+    private ItemStack createGrayPane() {
+        ItemStack pane;
+        try {
+            Material mat = Material.valueOf("GRAY_STAINED_GLASS_PANE");
+            pane = new ItemStack(mat);
+        } catch (IllegalArgumentException e) {
+            pane = new ItemStack(Material.valueOf("STAINED_GLASS_PANE"), 1, (short) 7);
+        }
+        ItemMeta meta = pane.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.GRAY + " ");
+            pane.setItemMeta(meta);
+        }
+        return pane;
+    }
+
+    public GameMode getPreviousGameMode(UUID uuid) {
+        return previousGameModes.get(uuid);
     }
 
     public void remove(UUID uuid) {
         Player player = Bukkit.getPlayer(uuid);
-        if (player != null && player.isOnline()) {
-            clearGhostBlocks(player);
-        } else {
-            activeGhostBlocks.remove(uuid);
+        GameMode prev = previousGameModes.remove(uuid);
+        if (player != null && player.isOnline() && prev != null) {
+            player.setGameMode(prev);
         }
-        phasedPlayers.remove(uuid);
     }
 
     public void clearAll() {
-        for (UUID uuid : phasedPlayers) {
-            Player p = Bukkit.getPlayer(uuid);
+        for (Map.Entry<UUID, GameMode> entry : previousGameModes.entrySet()) {
+            Player p = Bukkit.getPlayer(entry.getKey());
             if (p != null && p.isOnline()) {
-                clearGhostBlocks(p);
+                p.setGameMode(entry.getValue());
             }
         }
-        phasedPlayers.clear();
-        activeGhostBlocks.clear();
-    }
-
-    public static class BlockPos {
-        private final String worldName;
-        private final int x, y, z;
-
-        public BlockPos(String worldName, int x, int y, int z) {
-            this.worldName = worldName;
-            this.x = x;
-            this.y = y;
-            this.z = z;
-        }
-
-        public Block getBlock() {
-            World w = Bukkit.getWorld(worldName);
-            return w != null ? w.getBlockAt(x, y, z) : null;
-        }
-
-        public Location toLocation() {
-            World w = Bukkit.getWorld(worldName);
-            return w != null ? new Location(w, x, y, z) : null;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof BlockPos)) return false;
-            BlockPos b = (BlockPos) o;
-            return x == b.x && y == b.y && z == b.z && Objects.equals(worldName, b.worldName);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(worldName, x, y, z);
-        }
+        previousGameModes.clear();
     }
 }

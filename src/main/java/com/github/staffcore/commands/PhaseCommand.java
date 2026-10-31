@@ -27,6 +27,11 @@ public class PhaseCommand implements CommandExecutor {
             return true;
         }
 
+        if (args.length > 0 && (args[0].equalsIgnoreCase("inv") || args[0].equalsIgnoreCase("inventory"))) {
+            plugin.getPhaseManager().openSurvivalInventory(player);
+            return true;
+        }
+
         plugin.getPhaseManager().togglePhase(player);
         return true;
     }

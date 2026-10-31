@@ -15,7 +15,6 @@ com/github/staffcore/phase/PhaseManager.class
 com/github/staffcore/listeners/PunishmentListener.class
 com/github/staffcore/commands/PunishCommands$ParsedReason.class
 com/github/staffcore/database/DatabaseManager.class
-com/github/staffcore/phase/PhaseManager$BlockPos.class
 com/github/staffcore/punishment/PunishmentType.class
 com/github/staffcore/listeners/PhaseListener.class
 com/github/staffcore/punishment/Punishment.class
