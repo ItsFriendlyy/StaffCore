@@ -4,7 +4,10 @@ import com.github.staffcore.commands.*;
 import com.github.staffcore.config.MessageManager;
 import com.github.staffcore.database.DatabaseManager;
 import com.github.staffcore.freeze.FreezeManager;
+import com.github.staffcore.hooks.PlaceholderHook;
+import com.github.staffcore.hooks.VoicechatHook;
 import com.github.staffcore.listeners.*;
+import com.github.staffcore.phase.PhaseManager;
 import com.github.staffcore.punishment.PunishmentManager;
 import com.github.staffcore.staffchat.StaffChatManager;
 import com.github.staffcore.util.UpdateChecker;
@@ -24,6 +27,7 @@ public final class StaffCore extends JavaPlugin {
     private FreezeManager freezeManager;
     private StaffChatManager staffChatManager;
     private VanishManager vanishManager;
+    private PhaseManager phaseManager;
     private UpdateChecker updateChecker;
     private PunishCommands punishExecutor;
     private UtilityCommands utilExecutor;
@@ -40,6 +44,7 @@ public final class StaffCore extends JavaPlugin {
         this.freezeManager = new FreezeManager(this);
         this.staffChatManager = new StaffChatManager(this);
         this.vanishManager = new VanishManager(this);
+        this.phaseManager = new PhaseManager(this);
 
         // Load persistent utility states (/fly, /speed, /invincible, /spawn, /warps, /homes)
         UtilityCommands.loadStates(this);
@@ -52,6 +57,7 @@ public final class StaffCore extends JavaPlugin {
         pm.registerEvents(new PunishmentListener(this), this);
         pm.registerEvents(new FreezeListener(this), this);
         pm.registerEvents(new VanishListener(this), this);
+        pm.registerEvents(new PhaseListener(this), this);
         pm.registerEvents(new GuiListener(this), this);
         pm.registerEvents(new UtilityListener(this), this);
 
@@ -76,7 +82,11 @@ public final class StaffCore extends JavaPlugin {
             getLogger().warning("Could not initialize bStats metrics: " + t.getMessage());
         }
 
-        // 6. Register Commands & Tab Completers
+        // 6. External Hooks (PlaceholderAPI & Simple Voice Chat)
+        PlaceholderHook.tryRegister(this);
+        VoicechatHook.tryRegister(this);
+
+        // 7. Register Commands & Tab Completers
         registerCommands();
 
         getLogger().info("StaffCore v" + getDescription().getVersion() + " enabled successfully! Ready for moderation.");
@@ -86,6 +96,9 @@ public final class StaffCore extends JavaPlugin {
     public void onDisable() {
         UtilityCommands.saveStates(this);
 
+        if (phaseManager != null) {
+            phaseManager.clearAll();
+        }
         if (freezeManager != null) {
             freezeManager.stop();
         }
@@ -135,6 +148,13 @@ public final class StaffCore extends JavaPlugin {
                 cmd.setExecutor(this.utilExecutor);
                 cmd.setTabCompleter(tabCompleter);
             }
+        }
+
+        // Phase Command
+        PluginCommand phaseCmd = getCommand("phase");
+        if (phaseCmd != null) {
+            phaseCmd.setExecutor(new PhaseCommand(this));
+            phaseCmd.setTabCompleter(tabCompleter);
         }
 
         // Freeze
@@ -223,6 +243,7 @@ public final class StaffCore extends JavaPlugin {
     public FreezeManager getFreezeManager() { return freezeManager; }
     public StaffChatManager getStaffChatManager() { return staffChatManager; }
     public VanishManager getVanishManager() { return vanishManager; }
+    public PhaseManager getPhaseManager() { return phaseManager; }
     public DatabaseManager getDatabaseManager() { return punishmentManager != null ? punishmentManager.getDatabaseManager() : null; }
     public UpdateChecker getUpdateChecker() { return updateChecker; }
 }

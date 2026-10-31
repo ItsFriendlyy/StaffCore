@@ -1,10 +1,14 @@
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/PhaseListener.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/punishment/Punishment.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/hooks/StaffCoreExpansion.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/StaffCore.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/hooks/PlaceholderHook.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/DatabaseManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/gui/TeleportGui.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/util/UpdateChecker.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/config/MessageManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/commands/VanishCommand.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/phase/PhaseManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/util/TimeUtil.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/VanishListener.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/GuiListener.java
@@ -14,9 +18,12 @@
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/commands/StaffTabCompleter.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/freeze/FreezeManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/commands/UtilityCommands.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/commands/PhaseCommand.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/FreezeListener.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/PunishmentListener.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/hooks/StaffCoreVoicechatPlugin.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/vanish/VanishManager.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/hooks/VoicechatHook.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/UtilityListener.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/punishment/PunishmentManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/commands/ChatCommand.java

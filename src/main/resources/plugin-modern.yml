@@ -1,9 +1,10 @@
 name: StaffCore
-version: 1.2.4
+version: 1.3
 main: com.github.staffcore.StaffCore
 api-version: 1.20
 author: StaffCoreDev
 description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, Jail, Spawn, Warps, Homes, BungeeCord, and Utilities.
+softdepend: [BungeeCord, PlaceholderAPI, voicechat]
 
 commands:
   ban:
@@ -82,6 +83,10 @@ commands:
     description: Switches between staff chat and global chat.
     usage: /chat <staff|all>
     permission: staffcore.command.chat
+  phase:
+    description: Toggles phasing through blocks without spectator mode.
+    usage: /phase
+    permission: staffcore.command.phase
   vanish:
     description: Toggles complete invisibility and hides you from tab list and player counter.
     aliases: [v]
@@ -418,4 +423,10 @@ permissions:
     default: op
   staffcore.bypass.warn:
     description: Protects a player from being warned.
+    default: op
+  staffcore.command.phase:
+    description: Allows toggling phase mode
+    default: op
+  staffcore.phase:
+    description: Allows toggling phase mode
     default: op

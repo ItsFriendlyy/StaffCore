@@ -76,6 +76,10 @@ public class VanishManager {
         return count;
     }
 
+    public Set<UUID> getVanishedPlayers() {
+        return vanishedPlayers;
+    }
+
     public void toggleVanish(Player player) {
         setVanished(player, !isVanished(player.getUniqueId()));
     }
@@ -95,6 +99,13 @@ public class VanishManager {
             player.sendMessage(plugin.getMessageManager().color(
                     plugin.getConfig().getString("vanish.enabled", "&aYou are now vanished!")));
 
+            // Suggest /phase command in chat when vanishing
+            String phaseTip = plugin.getConfig().getString("vanish.phase-suggestion",
+                    "&7Tip: You can use &e/phase &7to phase through blocks without spectator mode!");
+            if (phaseTip != null && !phaseTip.trim().isEmpty()) {
+                player.sendMessage(plugin.getMessageManager().color(phaseTip));
+            }
+
             String staffAlert = plugin.getMessageManager().color(
                     plugin.getConfig().getString("vanish.staff-notify-vanish", "&8[&bVanish&8] &e%player% &7is now vanished.")
                             .replace("%player%", player.getName()));
@@ -102,6 +113,11 @@ public class VanishManager {
         } else {
             vanishedPlayers.remove(uuid);
             saveData();
+
+            // Disable phase mode automatically upon unvanishing if active
+            if (plugin.getPhaseManager() != null && plugin.getPhaseManager().isPhased(uuid)) {
+                plugin.getPhaseManager().setPhased(player, false);
+            }
 
             // Restore original name in tab list
             player.setPlayerListName(player.getName());
@@ -122,7 +138,7 @@ public class VanishManager {
     public void updateVisibility(Player vanishedPlayer) {
         for (Player other : Bukkit.getOnlinePlayers()) {
             if (other.equals(vanishedPlayer)) continue;
-            if (other.isOp() || other.hasPermission("staffcore.vanish.see")) {
+            if (other.isOp() || other.hasPermission("staffcore.vanish.see") || other.hasPermission("staffcore.staff")) {
                 show(other, vanishedPlayer);
             } else {
                 hide(other, vanishedPlayer);
@@ -152,7 +168,7 @@ public class VanishManager {
         for (UUID uuid : vanishedPlayers) {
             Player vanished = Bukkit.getPlayer(uuid);
             if (vanished != null && vanished.isOnline() && !vanished.equals(player)) {
-                if (player.isOp() || player.hasPermission("staffcore.vanish.see")) {
+                if (player.isOp() || player.hasPermission("staffcore.vanish.see") || player.hasPermission("staffcore.staff")) {
                     show(player, vanished);
                 } else {
                     hide(player, vanished);
@@ -163,6 +179,9 @@ public class VanishManager {
 
     public void onPlayerQuit(Player player) {
         // We do NOT remove from vanishedPlayers so they stay vanished when relogging!
+        if (plugin.getPhaseManager() != null) {
+            plugin.getPhaseManager().remove(player.getUniqueId());
+        }
     }
 
     private void startActionBarTask() {
