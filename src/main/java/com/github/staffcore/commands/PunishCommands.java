@@ -365,6 +365,7 @@ public class PunishCommands implements CommandExecutor {
         plugin.getPunishmentManager().kickPlayer(target, sender.getName(), parsed.reason, parsed.silent);
         return true;
     }
+
     private boolean handleWarn(CommandSender sender, String[] args) {
         if (args.length < 1) {
             sender.sendMessage(plugin.getMessageManager().color("&cUsage: /warn <player> [reason] [-s]"));
@@ -482,7 +483,7 @@ public class PunishCommands implements CommandExecutor {
         List<String> words = new ArrayList<>();
 
         for (int i = startIndex; i < args.length; i++) {
-            if (args[i].equalsIgnoreCase("-s")) {
+            if (args[i].equalsIgnoreCase("-s") || args[i].equalsIgnoreCase("-silent")) {
                 silent = true;
             } else {
                 words.add(args[i]);

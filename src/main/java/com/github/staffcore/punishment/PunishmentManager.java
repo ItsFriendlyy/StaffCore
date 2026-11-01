@@ -90,7 +90,7 @@ public class PunishmentManager {
                 try {
                     UUID id = UUID.fromString(key);
                     String targetUuidStr = section.getString(key + ".targetUUID");
-                    UUID targetUUID = targetUuidStr != null ? UUID.fromString(targetUuidStr) : null;
+                    UUID targetUUID = (targetUuidStr != null && !targetUuidStr.isEmpty() && !targetUuidStr.equalsIgnoreCase("null")) ? UUID.fromString(targetUuidStr) : null;
                     String targetName = section.getString(key + ".targetName", "Unknown");
                     String targetIp = section.getString(key + ".targetIp", "");
                     String staffName = section.getString(key + ".staffName", "Console");
@@ -156,7 +156,6 @@ public class PunishmentManager {
             }
         }
 
-        // Also cache any currently online players
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (p.getAddress() != null && p.getAddress().getAddress() != null) {
                 cachePlayerIp(p.getUniqueId(), p.getName(), p.getAddress().getAddress().getHostAddress());
@@ -281,7 +280,6 @@ public class PunishmentManager {
         String cleanJail = jailName.toLowerCase();
         Location jailLoc = getJailLocation(cleanJail);
 
-        // Deactivate any previous active jail records for this player
         for (Punishment existing : punishments) {
             if (existing.getTargetUUID() != null && existing.getTargetUUID().equals(targetUUID) && existing.isActive() &&
                 (existing.getType() == PunishmentType.JAIL || existing.getType() == PunishmentType.TEMP_JAIL)) {
@@ -533,6 +531,36 @@ public class PunishmentManager {
         return p;
     }
 
+    public void kickPlayer(Player target, String staffName, String reason, boolean silent) {
+        if (target == null || !target.isOnline()) return;
+
+        UUID targetUUID = target.getUniqueId();
+        String targetName = target.getName();
+        String ip = (target.getAddress() != null && target.getAddress().getAddress() != null)
+                ? target.getAddress().getAddress().getHostAddress() : getLastKnownIp(targetUUID);
+
+        Punishment p = new Punishment(UUID.randomUUID(), targetUUID, targetName, ip != null ? ip : "",
+                staffName, PunishmentType.KICK, reason, System.currentTimeMillis(), -1, -1, false);
+        punishments.add(p);
+        saveData();
+
+        broadcastPunishment(p, silent);
+
+        final String kickMsg = getBanKickMessage(p);
+        Bukkit.getScheduler().runTask(plugin, () -> target.kickPlayer(kickMsg));
+    }
+
+    public int getKickCount(UUID targetUUID) {
+        if (targetUUID == null) return 0;
+        int count = 0;
+        for (Punishment p : punishments) {
+            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) && p.getType() == PunishmentType.KICK) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public int getActiveWarnCount(UUID targetUUID) {
         if (targetUUID == null) return 0;
         int count = 0;
@@ -708,35 +736,6 @@ public class PunishmentManager {
         return count;
     }
 
-    public void kickPlayer(Player target, String staffName, String reason, boolean silent) {
-        if (target == null || !target.isOnline()) return;
-
-        UUID targetUUID = target.getUniqueId();
-        String targetName = target.getName();
-        String ip = (target.getAddress() != null && target.getAddress().getAddress() != null)
-                ? target.getAddress().getAddress().getHostAddress() : getLastKnownIp(targetUUID);
-
-        Punishment p = new Punishment(UUID.randomUUID(), targetUUID, targetName, ip != null ? ip : "",
-                staffName, PunishmentType.KICK, reason, System.currentTimeMillis(), -1, -1, false);
-        punishments.add(p);
-        saveData();
-
-        broadcastPunishment(p, silent);
-
-        final String kickMsg = getBanKickMessage(p);
-        Bukkit.getScheduler().runTask(plugin, () -> target.kickPlayer(kickMsg));
-    }
-
-    public int getKickCount(UUID targetUUID) {
-        if (targetUUID == null) return 0;
-        int count = 0;
-        for (Punishment p : punishments) {
-            if (p.getTargetUUID() != null && p.getTargetUUID().equals(targetUUID) && p.getType() == PunishmentType.KICK) {
-                count++;
-            }
-        }
-        return count;
-    }
     public int getWarnCount(UUID targetUUID) {
         int count = 0;
         for (Punishment p : punishments) {
@@ -849,7 +848,7 @@ public class PunishmentManager {
         if (silent) {
             String formatKey = "broadcasts.silent." + p.getType().name().toLowerCase().replace("_", "");
             String msg = plugin.getConfig().getString(formatKey);
-            if (msg == null) {
+            if (msg == null || msg.trim().isEmpty() || msg.contains("PUNISH") || msg.contains("»")) {
                 if (p.getType() == PunishmentType.KICK) {
                     msg = "&8[&cSilent&8] &7%staff% kicked &e%target% &7for: &f%reason%";
                 } else if (p.getType() == PunishmentType.JAIL) {
@@ -877,7 +876,7 @@ public class PunishmentManager {
         } else {
             String formatKey = "broadcasts.public." + p.getType().name().toLowerCase().replace("_", "");
             String msg = plugin.getConfig().getString(formatKey);
-            if (msg == null) {
+            if (msg == null || msg.trim().isEmpty()) {
                 if (p.getType() == PunishmentType.KICK) {
                     msg = "&c&lPUNISH &8» &f%target% &7was kicked by &f%staff% &7for: &e%reason%";
                 } else if (p.getType() == PunishmentType.JAIL) {

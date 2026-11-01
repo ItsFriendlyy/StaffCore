@@ -7,6 +7,7 @@ import com.github.staffcore.gui.TeleportGui;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -15,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -42,7 +44,9 @@ public class GuiListener implements Listener {
 
         StaffCore core = (this.plugin != null) ? this.plugin : JavaPlugin.getPlugin(StaffCore.class);
 
+        // =====================================================================
         // 1. Main /check GUI
+        // =====================================================================
         if (title.startsWith(CheckGui.GUI_TITLE_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -53,6 +57,7 @@ public class GuiListener implements Listener {
             @SuppressWarnings("deprecation")
             OfflinePlayer target = onlineTarget != null ? onlineTarget : Bukkit.getOfflinePlayer(targetName);
 
+            // Slot 4: Player Skull - Right-click to reveal/hide IP address
             if (event.getRawSlot() == 4 && event.isRightClick()) {
                 if (!staff.hasPermission("staffcore.check.ip") && !staff.isOp()) return;
 
@@ -72,38 +77,103 @@ public class GuiListener implements Listener {
                         }
                     }
                 }
-                CheckGui.openGui(core, staff, target, currentlyHidden);
+                CheckGui.openGui(core, staff, target, targetName, currentlyHidden);
                 return;
             }
 
+            // Slot 14: Punishment History - Click to open full paginated history
             if (event.getRawSlot() == 14) {
-                CheckGui.openHistoryGui(core, staff, target);
+                CheckGui.openHistoryGui(core, staff, target, targetName, 1);
                 return;
             }
 
+            // Slot 22: Barrier close slot
             if (event.getRawSlot() == 22) {
                 staff.closeInventory();
             }
             return;
         }
 
-        // 2. Detailed Punishment History GUI
+        // =====================================================================
+        // 2. Detailed Paginated Punishment History GUI
+        // =====================================================================
         if (title.startsWith(CheckGui.HISTORY_TITLE_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
 
             Player staff = (Player) event.getWhoClicked();
-            if (event.getRawSlot() == 49) {
-                String targetName = ChatColor.stripColor(title.substring(CheckGui.HISTORY_TITLE_PREFIX.length())).trim();
-                Player onlineTarget = Bukkit.getPlayerExact(targetName);
-                @SuppressWarnings("deprecation")
-                OfflinePlayer target = onlineTarget != null ? onlineTarget : Bukkit.getOfflinePlayer(targetName);
-                CheckGui.openGui(core, staff, target, false);
+            int rawSlot = event.getRawSlot();
+            Inventory inv = event.getInventory();
+
+            // Extract target name reliably (first check Slot 49 back button lore, fallback to title)
+            String targetName = null;
+            ItemStack backItem = inv.getItem(49);
+            if (backItem != null && backItem.hasItemMeta() && backItem.getItemMeta().hasLore()) {
+                for (String line : backItem.getItemMeta().getLore()) {
+                    String stripped = ChatColor.stripColor(line);
+                    if (stripped.startsWith("Target: ")) {
+                        targetName = stripped.substring("Target: ".length()).trim();
+                        break;
+                    }
+                }
             }
+
+            if (targetName == null || targetName.isEmpty() || targetName.equalsIgnoreCase("Unknown")) {
+                String rest = title.substring(CheckGui.HISTORY_TITLE_PREFIX.length());
+                int lastParen = rest.lastIndexOf(" (");
+                if (lastParen != -1 && rest.endsWith(")")) {
+                    rest = rest.substring(0, lastParen);
+                }
+                targetName = ChatColor.stripColor(rest).trim();
+            }
+
+            Player onlineTarget = Bukkit.getPlayerExact(targetName);
+            @SuppressWarnings("deprecation")
+            OfflinePlayer target = onlineTarget != null ? onlineTarget : Bukkit.getOfflinePlayer(targetName);
+
+            // Extract current page from Slot 50 indicator item
+            int currentPage = 1;
+            ItemStack pageItem = inv.getItem(50);
+            if (pageItem != null && pageItem.hasItemMeta() && pageItem.getItemMeta().hasDisplayName()) {
+                String stripped = ChatColor.stripColor(pageItem.getItemMeta().getDisplayName()); // "Page X of Y"
+                if (stripped.startsWith("Page ") && stripped.contains(" of ")) {
+                    try {
+                        String numPart = stripped.substring("Page ".length(), stripped.indexOf(" of ")).trim();
+                        currentPage = Integer.parseInt(numPart);
+                    } catch (Throwable ignored) {}
+                }
+            }
+
+            // Slot 45: Previous Page Arrow
+            if (rawSlot == 45) {
+                ItemStack item = event.getCurrentItem();
+                if (item != null && item.getType() == Material.ARROW && currentPage > 1) {
+                    CheckGui.openHistoryGui(core, staff, target, targetName, currentPage - 1);
+                }
+                return;
+            }
+
+            // Slot 49: Back to /check Overview Button
+            if (rawSlot == 49) {
+                CheckGui.openGui(core, staff, target, targetName, false);
+                return;
+            }
+
+            // Slot 53: Next Page Arrow
+            if (rawSlot == 53) {
+                ItemStack item = event.getCurrentItem();
+                if (item != null && item.getType() == Material.ARROW) {
+                    CheckGui.openHistoryGui(core, staff, target, targetName, currentPage + 1);
+                }
+                return;
+            }
+
             return;
         }
 
+        // =====================================================================
         // 3. Interactive Homes GUI (/home)
+        // =====================================================================
         if (title.startsWith(TeleportGui.HOME_GUI_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -111,11 +181,13 @@ public class GuiListener implements Listener {
             Player player = (Player) event.getWhoClicked();
             int rawSlot = event.getRawSlot();
 
+            // Slot 49: Close
             if (rawSlot == 49) {
                 player.closeInventory();
                 return;
             }
 
+            // Slot 51: Mode Switcher (Bedrock / Sub-Menu Mode toggle)
             if (rawSlot == 51) {
                 TeleportGui.toggleBedrockMode(player.getUniqueId());
                 boolean nowBedrock = TeleportGui.isBedrockMode(player.getUniqueId());
@@ -141,6 +213,7 @@ public class GuiListener implements Listener {
 
             ClickType click = event.getClick();
 
+            // Java Shortcut: Shift + Right-Click -> Delete Home
             if (click == ClickType.SHIFT_RIGHT) {
                 homes.remove(homeDisplayName);
                 Map<String, String> icons = UtilityCommands.playerHomeIcons.get(player.getUniqueId());
@@ -153,6 +226,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Java Shortcut: Shift + Left-Click -> Rename Home via chat prompt
             if (click == ClickType.SHIFT_LEFT) {
                 player.closeInventory();
                 TeleportGui.renamingHomeMap.put(player.getUniqueId(), homeDisplayName);
@@ -161,16 +235,19 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Java Shortcut: Right-Click -> Open Icon Picker directly
             if (event.isRightClick()) {
                 TeleportGui.openHomeIconPicker(core, player, homeDisplayName);
                 return;
             }
 
+            // Standard Left-Click / Bedrock single tap
             if (TeleportGui.isBedrockMode(player.getUniqueId())) {
                 TeleportGui.openHomeActionsMenu(core, player, homeDisplayName);
                 return;
             }
 
+            // Direct Java Mode Left-Click: Instant Teleport
             Location loc = homes.get(homeDisplayName);
             if (loc != null && loc.getWorld() != null) {
                 player.closeInventory();
@@ -186,7 +263,9 @@ public class GuiListener implements Listener {
             return;
         }
 
+        // =====================================================================
         // 4. Bedrock / Touch Home Actions Sub-Menu ("Manage: <home_name>")
+        // =====================================================================
         if (title.startsWith(TeleportGui.HOME_ACTIONS_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -196,6 +275,7 @@ public class GuiListener implements Listener {
             Map<String, Location> homes = UtilityCommands.playerHomes.get(player.getUniqueId());
             int rawSlot = event.getRawSlot();
 
+            // Slot 22: Back button
             if (rawSlot == 22) {
                 TeleportGui.openHomeGui(core, player);
                 return;
@@ -207,6 +287,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Slot 10: 🟢 Teleport Button
             if (rawSlot == 10) {
                 Location loc = homes.get(homeName);
                 if (loc != null && loc.getWorld() != null) {
@@ -219,11 +300,13 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Slot 12: 🎨 Change Icon Button
             if (rawSlot == 12) {
                 TeleportGui.openHomeIconPicker(core, player, homeName);
                 return;
             }
 
+            // Slot 14: 🏷️ Rename Button
             if (rawSlot == 14) {
                 player.closeInventory();
                 TeleportGui.renamingHomeMap.put(player.getUniqueId(), homeName);
@@ -232,6 +315,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Slot 16: 🔴 Delete Button
             if (rawSlot == 16) {
                 homes.remove(homeName);
                 Map<String, String> icons = UtilityCommands.playerHomeIcons.get(player.getUniqueId());
@@ -246,7 +330,9 @@ public class GuiListener implements Listener {
             return;
         }
 
+        // =====================================================================
         // 5. Home Icon Picker GUI
+        // =====================================================================
         if (title.startsWith(TeleportGui.HOME_ICON_PICKER_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -280,7 +366,9 @@ public class GuiListener implements Listener {
             return;
         }
 
+        // =====================================================================
         // 6. Interactive Warps Explorer GUI (/warp)
+        // =====================================================================
         if (title.startsWith(TeleportGui.WARP_GUI_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -294,22 +382,25 @@ public class GuiListener implements Listener {
                 currentPage = Integer.parseInt(pagePart);
             } catch (Throwable ignored) {}
 
+            // Slot 45: Previous page
             if (rawSlot == 45 && currentPage > 1) {
                 TeleportGui.openWarpGui(core, player, currentPage - 1);
                 return;
             }
 
-            // Slot 47: "★ My Warps" Button
+            // Slot 47: "My Warps" Button
             if (rawSlot == 47) {
                 TeleportGui.openMyWarpsGui(core, player);
                 return;
             }
 
+            // Slot 49: Close
             if (rawSlot == 49) {
                 player.closeInventory();
                 return;
             }
 
+            // Slot 51: Mode Switcher toggle
             if (rawSlot == 51) {
                 TeleportGui.toggleBedrockMode(player.getUniqueId());
                 boolean nowBedrock = TeleportGui.isBedrockMode(player.getUniqueId());
@@ -322,6 +413,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Slot 53: Next page
             if (rawSlot == 53) {
                 TeleportGui.openWarpGui(core, player, currentPage + 1);
                 return;
@@ -336,6 +428,7 @@ public class GuiListener implements Listener {
             Location loc = UtilityCommands.warps.get(warpName);
             if (loc == null) return;
 
+            // Check warp privacy access
             if (!UtilityCommands.canAccessWarp(player, warpName)) {
                 player.sendMessage(core.getMessageManager().color(
                         core.getConfig().getString("messages.warp-is-private", "&cThis warp is private!")));
@@ -346,6 +439,7 @@ public class GuiListener implements Listener {
             boolean isAdmin = player.hasPermission("staffcore.command.delwarp.admin") || player.hasPermission("staffcore.admin") || player.isOp();
             ClickType click = event.getClick();
 
+            // Shift + Right-Click: Delete warp (Owner or Admin)
             if (click == ClickType.SHIFT_RIGHT && (isOwner || isAdmin)) {
                 UtilityCommands.warps.remove(warpName);
                 UtilityCommands.warpIcons.remove(warpName);
@@ -359,16 +453,19 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Right-Click: Edit warp icon (Owner or Admin)
             if (event.isRightClick() && (isOwner || isAdmin)) {
                 TeleportGui.openWarpIconPicker(core, player, warpName);
                 return;
             }
 
+            // Bedrock / Sub-Menu Mode for owner
             if (TeleportGui.isBedrockMode(player.getUniqueId()) && (isOwner || isAdmin)) {
                 TeleportGui.openWarpActionsMenu(core, player, warpName);
                 return;
             }
 
+            // Left-Click: Teleport to Warp
             if (loc.getWorld() != null) {
                 player.closeInventory();
                 player.teleport(loc);
@@ -379,7 +476,9 @@ public class GuiListener implements Listener {
             return;
         }
 
+        // =====================================================================
         // 7. "My Warps" Management GUI
+        // =====================================================================
         if (title.startsWith(TeleportGui.MY_WARPS_GUI_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -387,16 +486,19 @@ public class GuiListener implements Listener {
             Player player = (Player) event.getWhoClicked();
             int rawSlot = event.getRawSlot();
 
+            // Slot 45: Back to Public Warps
             if (rawSlot == 45) {
                 TeleportGui.openWarpGui(core, player, 1);
                 return;
             }
 
+            // Slot 49: Close
             if (rawSlot == 49) {
                 player.closeInventory();
                 return;
             }
 
+            // Slot 51: Mode Switcher
             if (rawSlot == 51) {
                 TeleportGui.toggleBedrockMode(player.getUniqueId());
                 boolean nowBedrock = TeleportGui.isBedrockMode(player.getUniqueId());
@@ -420,6 +522,7 @@ public class GuiListener implements Listener {
 
             ClickType click = event.getClick();
 
+            // Java Shortcut: Shift + Right-Click -> Delete Warp
             if (click == ClickType.SHIFT_RIGHT) {
                 UtilityCommands.warps.remove(warpName);
                 UtilityCommands.warpIcons.remove(warpName);
@@ -433,6 +536,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Java Shortcut: Shift + Left-Click -> Rename Warp via chat prompt
             if (click == ClickType.SHIFT_LEFT) {
                 player.closeInventory();
                 TeleportGui.renamingWarpMap.put(player.getUniqueId(), warpName);
@@ -441,16 +545,19 @@ public class GuiListener implements Listener {
                 return;
             }
 
+            // Java Shortcut: Right-Click -> Open Icon Picker
             if (event.isRightClick()) {
                 TeleportGui.openWarpIconPicker(core, player, warpName);
                 return;
             }
 
+            // Bedrock / Sub-Menu mode
             if (TeleportGui.isBedrockMode(player.getUniqueId())) {
                 TeleportGui.openWarpActionsMenu(core, player, warpName);
                 return;
             }
 
+            // Direct Java Mode: Teleport
             if (loc.getWorld() != null) {
                 player.closeInventory();
                 player.teleport(loc);
@@ -461,7 +568,9 @@ public class GuiListener implements Listener {
             return;
         }
 
+        // =====================================================================
         // 8. Bedrock / Touch Warp Actions Sub-Menu ("Manage Warp: <warp_name>")
+        // =====================================================================
         if (title.startsWith(TeleportGui.WARP_ACTIONS_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -471,6 +580,7 @@ public class GuiListener implements Listener {
             Location loc = UtilityCommands.warps.get(warpName);
             int rawSlot = event.getRawSlot();
 
+            // Slot 22: Back button to My Warps
             if (rawSlot == 22) {
                 TeleportGui.openMyWarpsGui(core, player);
                 return;
@@ -482,7 +592,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 10: Teleport
+            // Slot 10: 🟢 Teleport Button
             if (rawSlot == 10) {
                 if (loc.getWorld() != null) {
                     player.closeInventory();
@@ -494,13 +604,13 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 12: Change Icon
+            // Slot 12: 🎨 Change Icon Button
             if (rawSlot == 12) {
                 TeleportGui.openWarpIconPicker(core, player, warpName);
                 return;
             }
 
-            // Slot 14: Rename
+            // Slot 14: 🏷️ Rename Button
             if (rawSlot == 14) {
                 player.closeInventory();
                 TeleportGui.renamingWarpMap.put(player.getUniqueId(), warpName);
@@ -509,7 +619,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 15: Toggle Visibility (Public / Private)
+            // Slot 15: 👁️ Toggle Public / Private Visibility
             if (rawSlot == 15) {
                 boolean wasPrivate = UtilityCommands.isWarpPrivate(warpName);
                 UtilityCommands.setWarpPrivate(warpName, !wasPrivate);
@@ -526,7 +636,7 @@ public class GuiListener implements Listener {
                 return;
             }
 
-            // Slot 16: Delete
+            // Slot 16: 🔴 Delete Button
             if (rawSlot == 16) {
                 UtilityCommands.warps.remove(warpName);
                 UtilityCommands.warpIcons.remove(warpName);
@@ -542,7 +652,9 @@ public class GuiListener implements Listener {
             return;
         }
 
+        // =====================================================================
         // 9. Warp Icon Picker GUI
+        // =====================================================================
         if (title.startsWith(TeleportGui.WARP_ICON_PICKER_PREFIX)) {
             event.setCancelled(true);
             if (!(event.getWhoClicked() instanceof Player)) return;
@@ -576,6 +688,9 @@ public class GuiListener implements Listener {
         }
     }
 
+    /**
+     * Handles chat input for home and warp renaming.
+     */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
@@ -652,10 +767,12 @@ public class GuiListener implements Listener {
             if (loc != null) {
                 UtilityCommands.warps.put(newName, loc);
 
+                // Transfer icon
                 String icon = UtilityCommands.getWarpIcon(oldName);
                 UtilityCommands.setWarpIcon(newName, icon);
                 UtilityCommands.warpIcons.remove(oldName);
 
+                // Transfer owner
                 UUID owner = UtilityCommands.warpOwners.remove(oldName);
                 if (owner != null) {
                     UtilityCommands.warpOwners.put(newName, owner);
@@ -663,6 +780,7 @@ public class GuiListener implements Listener {
                     UtilityCommands.warpOwners.put(newName, uuid);
                 }
 
+                // Transfer privacy state
                 if (UtilityCommands.privateWarps.remove(oldName)) {
                     UtilityCommands.privateWarps.add(newName);
                 }
