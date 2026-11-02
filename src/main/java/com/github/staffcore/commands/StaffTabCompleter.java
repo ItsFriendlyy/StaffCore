@@ -2,6 +2,7 @@ package com.github.staffcore.commands;
 
 import com.github.staffcore.StaffCore;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
@@ -10,7 +11,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.StringUtil;
-import org.bukkit.Material;
 
 import java.util.*;
 
@@ -44,6 +44,14 @@ public class StaffTabCompleter implements TabCompleter {
             return completions;
         }
 
+        // 1b. /phase [inv]
+        if (cmd.equals("phase")) {
+            if (args.length == 1) {
+                return Collections.singletonList("inv");
+            }
+            return Collections.emptyList();
+        }
+
         // 1. /chat
         if (cmd.equals("chat")) {
             if (args.length == 1) {
@@ -52,7 +60,7 @@ public class StaffTabCompleter implements TabCompleter {
             return completions;
         }
 
-        // 2. Commands without tab completion (including /sethome and /setwarp so they never suggest existing names)
+        // 2. Commands without tab completion (including /sethome, /setwarp, and /phase)
         if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") || cmd.equals("setjail") || cmd.equals("setspawn") ||
             cmd.equals("sethome") || cmd.equals("setwarp") ||
             cmd.equals("cleargrounditems") || cmd.equals("cleargrouditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
@@ -203,38 +211,44 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 4. /give <player|*> <item> [amount] (includes ALL runtime 1.8 - 1.21+ items & Netherite)
-       // 4. /give <player|*> <item> [amount] (includes ALL runtime 1.8 - 1.21+ items & Netherite)
+        // 4. /give [player|*] <item> [amount] (supports fast self-give: /give <item> [amount])
         if (cmd.equals("give")) {
             if (args.length == 1) {
-                return getPlayerNameCompletions(args[0], true);
-            } else if (args.length == 2) {
-                String rawQuery = args[1].toLowerCase().replace("minecraft:", "").trim();
-                if (rawQuery.contains("netherrite")) {
-                    rawQuery = rawQuery.replace("netherrite", "netherite");
-                }
-                List<String> startsWithMatches = new ArrayList<>();
-                List<String> containsMatches = new ArrayList<>();
+                String query = args[0].toLowerCase().trim();
+                List<String> playerMatches = getPlayerNameCompletions(args[0], true);
 
-                for (org.bukkit.Material m : org.bukkit.Material.values()) {
-                    if (m == null) continue;
-                    String item = m.name().toLowerCase();
-                    if (item.equals("air") || item.endsWith("_air") || item.startsWith("legacy_")) continue;
-                    if (item.startsWith(rawQuery)) {
-                        startsWithMatches.add(item);
-                    } else if (!rawQuery.isEmpty() && (item.contains(rawQuery) || item.replace("_", "").contains(rawQuery.replace("_", "")))) {
-                        containsMatches.add(item);
+                // If query is empty or matches an online username, suggest player names
+                if (query.isEmpty() || !playerMatches.isEmpty()) {
+                    return playerMatches;
+                }
+
+                // ONLY AND ONLY IF IT DETECTS TYPING AN ITEM OTHER THAN A USERNAME:
+                if (sender instanceof Player) {
+                    List<String> itemMatches = getItemCompletions(query);
+                    if (!itemMatches.isEmpty()) {
+                        return itemMatches;
                     }
                 }
-                for (String itemAlias : Arrays.asList("gapple", "egap", "notch_apple", "totem", "pearl", "xpbottle", "cmdblock", "steak")) {
-                    if (itemAlias.startsWith(rawQuery)) {
-                        startsWithMatches.add(itemAlias);
-                    }
+                return playerMatches;
+            } else if (args.length == 2) {
+                // If args[0] was an item and NOT an online player name (self-give: /give diamond [amount])
+                Material firstMat = UtilityCommands.matchEasyMaterial(args[0]);
+                Player target = Bukkit.getPlayerExact(args[0]);
+                if (sender instanceof Player && firstMat != null && firstMat != Material.AIR && target == null) {
+                    List<String> amounts = Arrays.asList("1", "16", "32", "64");
+                    StringUtil.copyPartialMatches(args[1], amounts, completions);
+                    return completions;
                 }
-                completions.addAll(startsWithMatches);
-                completions.addAll(containsMatches);
-                return completions;
+
+                // Otherwise args[0] was a player/wildcard, so args[1] is the item!
+                return getItemCompletions(args[1]);
             } else if (args.length == 3) {
+                Material firstMat = UtilityCommands.matchEasyMaterial(args[0]);
+                Player target = Bukkit.getPlayerExact(args[0]);
+                if (sender instanceof Player && firstMat != null && firstMat != Material.AIR && target == null) {
+                    return Collections.emptyList();
+                }
+
                 List<String> amounts = Arrays.asList("1", "16", "32", "64");
                 StringUtil.copyPartialMatches(args[2], amounts, completions);
                 return completions;
@@ -242,35 +256,67 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-        // 5. /effect <player|*> <potion|clear> [seconds] [level]
+        // 5. /effect [player|*] <potion|clear> [seconds] [level] (supports fast self-effect: /effect <potion|clear> [seconds] [level])
         if (cmd.equals("effect")) {
             if (args.length == 1) {
-                return getPlayerNameCompletions(args[0], true);
-            } else if (args.length == 2) {
-                Set<String> effects = new TreeSet<>();
-                effects.add("clear");
-                for (PotionEffectType pet : PotionEffectType.values()) {
-                    if (pet != null && pet.getName() != null) {
-                        effects.add(pet.getName().toLowerCase());
+                String query = args[0].toLowerCase().trim();
+                List<String> playerMatches = getPlayerNameCompletions(args[0], true);
+
+                // If query is empty or matches an online username, suggest player names
+                if (query.isEmpty() || !playerMatches.isEmpty()) {
+                    return playerMatches;
+                }
+
+                // ONLY AND ONLY IF IT DETECTS TYPING AN EFFECT OTHER THAN A USERNAME:
+                if (sender instanceof Player) {
+                    List<String> effectMatches = getEffectCompletions(query);
+                    if (!effectMatches.isEmpty()) {
+                        return effectMatches;
                     }
                 }
-                effects.addAll(Arrays.asList(
-                    "speed", "slowness", "haste", "mining_fatigue", "strength", "instant_health",
-                    "instant_damage", "jump_boost", "nausea", "regeneration", "resistance",
-                    "fire_resistance", "water_breathing", "invisibility", "blindness", "night_vision",
-                    "hunger", "weakness", "poison", "wither", "health_boost", "absorption", "saturation",
-                    "glowing", "levitation", "slow_falling", "conduit_power", "dolphins_grace", "darkness"
-                ));
-                StringUtil.copyPartialMatches(args[1].toLowerCase(), effects, completions);
-                return completions;
-            } else if (args.length == 3 && !args[1].equalsIgnoreCase("clear")) {
-                List<String> secs = Arrays.asList("30", "60", "120", "300", "600", "3600");
-                StringUtil.copyPartialMatches(args[2], secs, completions);
-                return completions;
-            } else if (args.length == 4 && !args[1].equalsIgnoreCase("clear")) {
-                List<String> levels = Arrays.asList("1", "2", "3", "4", "5", "10", "255");
-                StringUtil.copyPartialMatches(args[3], levels, completions);
-                return completions;
+                return playerMatches;
+            } else if (args.length == 2) {
+                // If args[0] was an effect name or clear and NOT an online player (self-effect: /effect speed [seconds])
+                String rawFirst = args[0].trim().toLowerCase();
+                boolean isClear = rawFirst.equals("clear") || rawFirst.equals("none") || rawFirst.equals("remove");
+                PotionEffectType firstType = UtilityCommands.getPotionEffectByName(rawFirst);
+                Player target = Bukkit.getPlayerExact(args[0]);
+
+                if (sender instanceof Player && (isClear || firstType != null) && target == null) {
+                    if (isClear) return Collections.emptyList();
+                    List<String> secs = Arrays.asList("30", "60", "120", "300", "600", "3600");
+                    StringUtil.copyPartialMatches(args[1], secs, completions);
+                    return completions;
+                }
+
+                // Otherwise args[0] was a player/wildcard, so args[1] is the effect!
+                return getEffectCompletions(args[1]);
+            } else if (args.length == 3) {
+                String rawFirst = args[0].trim().toLowerCase();
+                boolean isClear = rawFirst.equals("clear") || rawFirst.equals("none") || rawFirst.equals("remove");
+                PotionEffectType firstType = UtilityCommands.getPotionEffectByName(rawFirst);
+                Player target = Bukkit.getPlayerExact(args[0]);
+
+                if (sender instanceof Player && (isClear || firstType != null) && target == null) {
+                    if (isClear) return Collections.emptyList();
+                    List<String> levels = Arrays.asList("1", "2", "3", "4", "5", "10", "255");
+                    StringUtil.copyPartialMatches(args[2], levels, completions);
+                    return completions;
+                }
+
+                if (!args[1].equalsIgnoreCase("clear")) {
+                    List<String> secs = Arrays.asList("30", "60", "120", "300", "600", "3600");
+                    StringUtil.copyPartialMatches(args[2], secs, completions);
+                    return completions;
+                }
+                return Collections.emptyList();
+            } else if (args.length == 4) {
+                if (!args[1].equalsIgnoreCase("clear")) {
+                    List<String> levels = Arrays.asList("1", "2", "3", "4", "5", "10", "255");
+                    StringUtil.copyPartialMatches(args[3], levels, completions);
+                    return completions;
+                }
+                return Collections.emptyList();
             }
             return Collections.emptyList();
         }
@@ -346,7 +392,7 @@ public class StaffTabCompleter implements TabCompleter {
             return Collections.emptyList();
         }
 
-// 13. All single-durationless punish commands: /ban, /ipban, /ban-ip, /banip, /mute, /warn, /kick
+        // 13. All single-durationless punish commands (NO wildcard *): /ban, /ipban, /ban-ip, /banip, /mute, /warn
         if (cmd.equals("ban") || cmd.equals("ipban") || cmd.equals("ban-ip") || cmd.equals("banip") ||
             cmd.equals("mute") || cmd.equals("warn") || cmd.equals("kick")) {
             if (args.length == 1) {
@@ -468,5 +514,58 @@ public class StaffTabCompleter implements TabCompleter {
         StringUtil.copyPartialMatches(prefix, ipBanned, matches);
         Collections.sort(matches);
         return matches;
+    }
+
+    private List<String> getItemCompletions(String rawQuery) {
+        if (rawQuery == null) rawQuery = "";
+        String cleanQuery = rawQuery.toLowerCase().replace("minecraft:", "").trim();
+        if (cleanQuery.contains("netherrite")) {
+            cleanQuery = cleanQuery.replace("netherrite", "netherite");
+        }
+        List<String> startsWithMatches = new ArrayList<>();
+        List<String> containsMatches = new ArrayList<>();
+
+        for (Material m : Material.values()) {
+            if (m == null) continue;
+            String item = m.name().toLowerCase();
+            if (item.equals("air") || item.endsWith("_air") || item.startsWith("legacy_")) continue;
+            if (item.startsWith(cleanQuery)) {
+                startsWithMatches.add(item);
+            } else if (!cleanQuery.isEmpty() && (item.contains(cleanQuery) || item.replace("_", "").contains(cleanQuery.replace("_", "")))) {
+                containsMatches.add(item);
+            }
+        }
+        for (String itemAlias : Arrays.asList("gapple", "egap", "notch_apple", "totem", "pearl", "xpbottle", "cmdblock", "steak")) {
+            if (itemAlias.startsWith(cleanQuery)) {
+                startsWithMatches.add(itemAlias);
+            }
+        }
+        List<String> results = new ArrayList<>();
+        results.addAll(startsWithMatches);
+        results.addAll(containsMatches);
+        return results;
+    }
+
+    private List<String> getEffectCompletions(String query) {
+        if (query == null) query = "";
+        String cleanQuery = query.toLowerCase().replace("minecraft:", "").trim();
+        Set<String> effects = new TreeSet<>();
+        effects.add("clear");
+        for (PotionEffectType pet : PotionEffectType.values()) {
+            if (pet != null && pet.getName() != null) {
+                effects.add(pet.getName().toLowerCase());
+            }
+        }
+        effects.addAll(Arrays.asList(
+            "speed", "slowness", "haste", "mining_fatigue", "strength", "instant_health",
+            "instant_damage", "jump_boost", "nausea", "regeneration", "resistance",
+            "fire_resistance", "water_breathing", "invisibility", "blindness", "night_vision",
+            "hunger", "weakness", "poison", "wither", "health_boost", "absorption", "saturation",
+            "glowing", "levitation", "slow_falling", "conduit_power", "dolphins_grace", "darkness"
+        ));
+        List<String> completions = new ArrayList<>();
+        StringUtil.copyPartialMatches(cleanQuery, effects, completions);
+        Collections.sort(completions);
+        return completions;
     }
 }
