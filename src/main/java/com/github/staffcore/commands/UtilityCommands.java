@@ -45,6 +45,7 @@ public class UtilityCommands implements CommandExecutor {
     public static final Map<String, String> warpIcons = new HashMap<>(); // warpName -> iconId
     public static final Map<String, UUID> warpOwners = new HashMap<>(); // warpName -> owner UUID
     public static final Set<String> privateWarps = new HashSet<>(); // lowercase warp names that are private
+    public static final Map<String, Long> warpPublicDates = new HashMap<>(); // warpName -> public timestamp
 
     public static final Map<UUID, Map<String, Location>> playerHomes = new HashMap<>();
     public static final Map<UUID, Map<String, String>> playerHomeIcons = new HashMap<>(); // uuid -> (homeName -> iconId)
@@ -145,13 +146,24 @@ public class UtilityCommands implements CommandExecutor {
         return privateWarps.contains(warpName.toLowerCase());
     }
 
-    public static void setWarpPrivate(String warpName, boolean isPrivate) {
+   public static void setWarpPrivate(String warpName, boolean isPrivate) {
         if (warpName == null) return;
         if (isPrivate) {
             privateWarps.add(warpName.toLowerCase());
         } else {
             privateWarps.remove(warpName.toLowerCase());
+            warpPublicDates.put(warpName.toLowerCase(), System.currentTimeMillis());
         }
+    }
+
+    public static long getWarpPublicDate(String warpName) {
+        if (warpName == null) return 0L;
+        return warpPublicDates.getOrDefault(warpName.toLowerCase(), 0L);
+    }
+
+    public static void setWarpPublicDate(String warpName, long time) {
+        if (warpName == null) return;
+        warpPublicDates.put(warpName.toLowerCase(), time);
     }
 
     public static boolean canAccessWarp(Player player, String warpName) {

@@ -6,11 +6,15 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 
+import java.lang.reflect.Method;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class TeleportGui {
@@ -19,7 +23,7 @@ public class TeleportGui {
     public static final String HOME_ACTIONS_PREFIX = ChatColor.DARK_GRAY + "Manage: " + ChatColor.GOLD;
     public static final String HOME_ICON_PICKER_PREFIX = ChatColor.DARK_GRAY + "Icon: " + ChatColor.GOLD;
 
-    public static final String WARP_GUI_PREFIX = ChatColor.DARK_GRAY + "Warps: " + ChatColor.GOLD;
+    public static final String WARP_GUI_PREFIX = ChatColor.DARK_GRAY + "Public Warps: " + ChatColor.GOLD;
     public static final String WARP_ICON_PICKER_PREFIX = ChatColor.DARK_GRAY + "Warp Icon: " + ChatColor.GOLD;
     public static final String MY_WARPS_GUI_PREFIX = ChatColor.DARK_GRAY + "My Warps: " + ChatColor.GOLD;
     public static final String WARP_ACTIONS_PREFIX = ChatColor.DARK_GRAY + "Manage Warp: " + ChatColor.GOLD;
@@ -78,20 +82,16 @@ public class TeleportGui {
             new IconChoice("diamond", "Treasury", "DIAMOND", "DIAMOND", (short) 0),
             new IconChoice("camp", "Wilderness Camp", "CAMPFIRE", "TORCH", (short) 0),
             new IconChoice("castle", "Stone Fortress", "STONE_BRICKS", "SMOOTH_BRICK", (short) 0),
-            new IconChoice("farm", "Harvest Fields", "WHEAT", "WHEAT", (short) 0),
-            new IconChoice("end", "Cosmic Portal", "ENDER_EYE", "EYE_OF_ENDER", (short) 0)
+            new IconChoice("farm", "Golden Harvest", "HAY_BLOCK", "HAY_BLOCK", (short) 0),
+            new IconChoice("nether", "Nether Portal", "NETHERRACK", "NETHERRACK", (short) 0),
+            new IconChoice("end", "End Gateway", "ENDER_EYE", "EYE_OF_ENDER", (short) 0),
+            new IconChoice("mine", "Mining Shaft", "IRON_PICKAXE", "IRON_PICKAXE", (short) 0),
+            new IconChoice("arena", "Combat Arena", "DIAMOND_SWORD", "DIAMOND_SWORD", (short) 0),
+            new IconChoice("star", "Sacred Shrine", "NETHER_STAR", "NETHER_STAR", (short) 0)
     ));
 
     public static boolean isBedrockMode(UUID uuid) {
         return bedrockModePlayers.contains(uuid);
-    }
-
-    public static void setBedrockMode(UUID uuid, boolean enabled) {
-        if (enabled) {
-            bedrockModePlayers.add(uuid);
-        } else {
-            bedrockModePlayers.remove(uuid);
-        }
     }
 
     public static void toggleBedrockMode(UUID uuid) {
@@ -103,7 +103,7 @@ public class TeleportGui {
     }
 
     // =========================================================================
-    //                            HOMES GUI (/home)
+    //                        HOMES EXPLORER GUI (/home)
     // =========================================================================
 
     public static void openHomeGui(StaffCore plugin, Player player) {
@@ -114,17 +114,20 @@ public class TeleportGui {
 
         Inventory inv = Bukkit.createInventory(null, 54, HOME_GUI_PREFIX + player.getName());
 
+        // Fill bottom control bar
         ItemStack filler = createGrayPane();
         for (int i = 45; i < 54; i++) {
             inv.setItem(i, filler);
         }
 
+        // Slot 49: Close
         inv.setItem(49, createButton(Material.BARRIER, "BARRIER", (short) 0,
                 ChatColor.RED + ChatColor.BOLD.toString() + "Close Menu",
                 Collections.singletonList(ChatColor.GRAY + "Click to close this window.")));
 
+        // Slot 51: Mode Switcher toggle
         boolean bedrock = isBedrockMode(uuid);
-        ItemStack modeItem = createButton(
+        inv.setItem(51, createButton(
                 bedrock ? Material.COMPASS : matchCrossVersionMaterial("REDSTONE_TORCH", "REDSTONE_TORCH_ON"),
                 bedrock ? "COMPASS" : "REDSTONE_TORCH_ON",
                 (short) 0,
@@ -138,16 +141,15 @@ public class TeleportGui {
                                 : ChatColor.YELLOW + "  • Shift/Right-click shortcuts active",
                         "",
                         ChatColor.GREEN + "Click to toggle mode!"
-                )
-        );
-        inv.setItem(51, modeItem);
+                )));
 
+        // Slot 53: Home limits counter
         String limitStr = (maxHomes == Integer.MAX_VALUE) ? "Unlimited" : String.valueOf(maxHomes);
         inv.setItem(53, createButton(Material.BOOK, "BOOK", (short) 0,
                 ChatColor.YELLOW + ChatColor.BOLD.toString() + "Home Statistics",
                 Arrays.asList(
                         ChatColor.GRAY + "Homes Used: " + ChatColor.GOLD + homeCount + ChatColor.GRAY + " / " + ChatColor.YELLOW + limitStr,
-                        ChatColor.GRAY + "Set new home: " + ChatColor.WHITE + "/sethome <name>"
+                        ChatColor.GRAY + "Create home: " + ChatColor.WHITE + "/sethome <name>"
                 )));
 
         if (homes != null && !homes.isEmpty()) {
@@ -167,8 +169,6 @@ public class TeleportGui {
                     if (loc != null && loc.getWorld() != null) {
                         lore.add(ChatColor.GRAY + "World: " + ChatColor.YELLOW + loc.getWorld().getName());
                         lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE + String.format("%.1f, %.1f, %.1f", loc.getX(), loc.getY(), loc.getZ()));
-                    } else {
-                        lore.add(ChatColor.RED + "World is currently unavailable!");
                     }
                     lore.add("");
 
@@ -187,19 +187,15 @@ public class TeleportGui {
             }
         } else {
             inv.setItem(22, createButton(Material.BOOK, "BOOK", (short) 0,
-                    ChatColor.YELLOW + ChatColor.BOLD.toString() + "No Homes Set!",
+                    ChatColor.YELLOW + ChatColor.BOLD.toString() + "You have no homes set!",
                     Arrays.asList(
-                            ChatColor.GRAY + "You do not have any saved homes.",
+                            ChatColor.GRAY + "You haven't set any homes yet.",
                             ChatColor.GRAY + "Type " + ChatColor.YELLOW + "/sethome <name>" + ChatColor.GRAY + " to create one!"
                     )));
         }
 
         player.openInventory(inv);
     }
-
-    // =========================================================================
-    //                 BEDROCK / TOUCH HOME ACTIONS SUB-MENU
-    // =========================================================================
 
     public static void openHomeActionsMenu(StaffCore plugin, Player player, String homeName) {
         Inventory inv = Bukkit.createInventory(null, 27, HOME_ACTIONS_PREFIX + homeName);
@@ -209,26 +205,31 @@ public class TeleportGui {
             inv.setItem(i, filler);
         }
 
+        // Slot 10: Teleport Button
         inv.setItem(10, createButton(
                 matchCrossVersionMaterial("ENDER_PEARL", "ENDER_PEARL"), "ENDER_PEARL", (short) 0,
                 ChatColor.GREEN + ChatColor.BOLD.toString() + "Teleport",
-                Arrays.asList(ChatColor.GRAY + "Teleport instantly to " + ChatColor.GOLD + homeName + ChatColor.GRAY + ".")));
+                Arrays.asList(ChatColor.GRAY + "Teleport instantly to home " + ChatColor.GOLD + homeName + ChatColor.GRAY + ".")));
 
+        // Slot 12: Change Icon Button
         inv.setItem(12, createButton(
                 Material.PAINTING, "PAINTING", (short) 0,
                 ChatColor.YELLOW + ChatColor.BOLD.toString() + "Change Icon",
                 Arrays.asList(ChatColor.GRAY + "Pick a custom icon for " + ChatColor.GOLD + homeName + ChatColor.GRAY + ".")));
 
+        // Slot 14: Rename Button
         inv.setItem(14, createButton(
                 matchCrossVersionMaterial("NAME_TAG", "NAME_TAG"), "NAME_TAG", (short) 0,
                 ChatColor.GOLD + ChatColor.BOLD.toString() + "Rename Home",
                 Arrays.asList(ChatColor.GRAY + "Type a new name in chat for " + ChatColor.GOLD + homeName + ChatColor.GRAY + ".")));
 
+        // Slot 16: Delete Button
         inv.setItem(16, createButton(
                 matchCrossVersionMaterial("REDSTONE_BLOCK", "REDSTONE_BLOCK"), "REDSTONE_BLOCK", (short) 0,
                 ChatColor.RED + ChatColor.BOLD.toString() + "Delete Home",
                 Arrays.asList(ChatColor.GRAY + "Permanently remove home " + ChatColor.GOLD + homeName + ChatColor.GRAY + ".")));
 
+        // Slot 22: Back Button
         inv.setItem(22, createButton(
                 Material.ARROW, "ARROW", (short) 0,
                 ChatColor.WHITE + ChatColor.BOLD.toString() + "◀ Back to Homes",
@@ -236,10 +237,6 @@ public class TeleportGui {
 
         player.openInventory(inv);
     }
-
-    // =========================================================================
-    //                         HOME ICON PICKER GUI
-    // =========================================================================
 
     public static void openHomeIconPicker(StaffCore plugin, Player player, String homeName) {
         Inventory inv = Bukkit.createInventory(null, 27, HOME_ICON_PICKER_PREFIX + homeName);
@@ -254,6 +251,7 @@ public class TeleportGui {
             inv.setItem(i, ICON_CHOICES.get(i).createItem(currentIcon));
         }
 
+        // Slot 22: Back Button
         inv.setItem(22, createButton(
                 Material.ARROW, "ARROW", (short) 0,
                 ChatColor.WHITE + ChatColor.BOLD.toString() + "◀ Back",
@@ -273,6 +271,7 @@ public class TeleportGui {
                 || player.hasPermission("staffcore.admin")
                 || player.isOp();
 
+        // Filter warps: public warps, plus caller personal warps, or all warps if admin
         List<String> visibleWarps = new ArrayList<>();
         for (String warpName : UtilityCommands.warps.keySet()) {
             boolean isPrivate = UtilityCommands.isWarpPrivate(warpName);
@@ -288,34 +287,50 @@ public class TeleportGui {
         int maxPages = Math.max(1, (int) Math.ceil((double) totalWarps / itemsPerPage));
         int currentPage = Math.max(1, Math.min(page, maxPages));
 
-        Inventory inv = Bukkit.createInventory(null, 54, WARP_GUI_PREFIX + currentPage + " / " + maxPages);
+        String title = WARP_GUI_PREFIX + currentPage + " / " + maxPages;
+        if (title.length() > 32) {
+            title = title.substring(0, 32);
+        }
+        Inventory inv = Bukkit.createInventory(null, 54, title);
 
+        // Fill bottom control bar
         ItemStack filler = createGrayPane();
         for (int i = 45; i < 54; i++) {
             inv.setItem(i, filler);
         }
 
+        // Slot 45: Previous Page
         if (currentPage > 1) {
             inv.setItem(45, createButton(Material.ARROW, "ARROW", (short) 0,
                     ChatColor.YELLOW + "◀ Previous Page (" + (currentPage - 1) + ")",
                     Collections.singletonList(ChatColor.GRAY + "View previous warps.")));
         }
 
-        // Slot 47: My Warps Button
-        inv.setItem(47, createButton(
-                matchCrossVersionMaterial("ENDER_CHEST", "ENDER_CHEST"), "ENDER_CHEST", (short) 0,
-                ChatColor.LIGHT_PURPLE + ChatColor.BOLD.toString() + "★ My Warps",
-                Arrays.asList(
-                        ChatColor.GRAY + "Click to open your personal warps menu.",
-                        ChatColor.YELLOW + "• Customize icons & rename",
-                        ChatColor.YELLOW + "• Toggle Public / Private visibility",
-                        ChatColor.YELLOW + "• Delete your existing warps"
-                )));
+        // Slot 47: My Warps Button (Personal warps management - Player's own skull)
+        ItemStack myWarpsBtn = createSkullItem();
+        SkullMeta skullMeta = (SkullMeta) myWarpsBtn.getItemMeta();
+        if (skullMeta != null) {
+            setSkullOwner(skullMeta, player, player.getName());
+            skullMeta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + "★ My Personal Warps");
+            skullMeta.setLore(Arrays.asList(
+                    ChatColor.GRAY + "Click to open your personal warps menu.",
+                    ChatColor.YELLOW + "• Only shows warps created by you",
+                    ChatColor.YELLOW + "• Customize icons & rename",
+                    ChatColor.YELLOW + "• Toggle Public / Private visibility",
+                    ChatColor.YELLOW + "• Delete your personal warps",
+                    "",
+                    ChatColor.GREEN + "▶ Click to view your personal warps!"
+            ));
+            myWarpsBtn.setItemMeta(skullMeta);
+        }
+        inv.setItem(47, myWarpsBtn);
 
+        // Slot 49: Barrier Close Button
         inv.setItem(49, createButton(Material.BARRIER, "BARRIER", (short) 0,
                 ChatColor.RED + ChatColor.BOLD.toString() + "Close Menu",
                 Collections.singletonList(ChatColor.GRAY + "Click to close this window.")));
 
+        // Slot 51: Mode Switcher / Bedrock Mode Toggle
         boolean bedrock = isBedrockMode(uuid);
         inv.setItem(51, createButton(
                 bedrock ? Material.COMPASS : matchCrossVersionMaterial("REDSTONE_TORCH", "REDSTONE_TORCH_ON"),
@@ -325,16 +340,18 @@ public class TeleportGui {
                         : ChatColor.AQUA + ChatColor.BOLD.toString() + "Mode: Direct Teleport",
                 Arrays.asList(
                         ChatColor.GRAY + "Click to toggle interaction style.",
-                        bedrock ? ChatColor.YELLOW + "Opens action sub-menu for owned warps"
+                        bedrock ? ChatColor.YELLOW + "Opens action sub-menu for owned/admin warps"
                                 : ChatColor.YELLOW + "Left-click teleports directly"
                 )));
 
+        // Slot 53: Next Page
         if (currentPage < maxPages) {
             inv.setItem(53, createButton(Material.ARROW, "ARROW", (short) 0,
                     ChatColor.YELLOW + "Next Page (" + (currentPage + 1) + ") ▶",
                     Collections.singletonList(ChatColor.GRAY + "View more warps.")));
         }
 
+        // Available slots layout (4 rows of 7 items)
         int[] availableSlots = {
                 10, 11, 12, 13, 14, 15, 16,
                 19, 20, 21, 22, 23, 24, 25,
@@ -344,6 +361,7 @@ public class TeleportGui {
 
         int startIndex = (currentPage - 1) * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalWarps);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
         if (totalWarps > 0) {
             int slotIdx = 0;
@@ -366,10 +384,30 @@ public class TeleportGui {
                         lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE + String.format("%.1f, %.1f, %.1f", loc.getX(), loc.getY(), loc.getZ()));
                     }
 
-                    if (isPrivate) {
-                        lore.add(ChatColor.RED + "Status: Private (Visible only to you & staff)");
+                    // Display Owner info for EVERYONE (Java fast usage)
+                    UUID ownerUuid = UtilityCommands.warpOwners.get(warpName);
+                    String ownerName = "Server";
+                    if (ownerUuid != null) {
+                        OfflinePlayer op = Bukkit.getOfflinePlayer(ownerUuid);
+                        ownerName = (op != null && op.getName() != null) ? op.getName() : "Unknown";
+                    }
+                    if (isOwner) {
+                        lore.add(ChatColor.GRAY + "Owner: " + ChatColor.GREEN + "You (" + player.getName() + ")");
                     } else {
-                        lore.add(ChatColor.GREEN + "Status: Public");
+                        lore.add(ChatColor.GRAY + "Owner: " + ChatColor.YELLOW + ownerName);
+                    }
+
+                    // Status and "Since when is this warp public"
+                    if (isPrivate) {
+                        lore.add(ChatColor.RED + "Status: Private " + ChatColor.DARK_GRAY + "(Visible only to owner & staff)");
+                    } else {
+                        lore.add(ChatColor.GREEN + "Status: Public " + ChatColor.GRAY + "(Visible to everyone)");
+                        long pubTime = UtilityCommands.getWarpPublicDate(warpName);
+                        if (pubTime > 0) {
+                            lore.add(ChatColor.GRAY + "Public Since: " + ChatColor.AQUA + sdf.format(new Date(pubTime)));
+                        } else {
+                            lore.add(ChatColor.GRAY + "Public Since: " + ChatColor.AQUA + "Server Origin");
+                        }
                     }
 
                     lore.add("");
@@ -378,8 +416,9 @@ public class TeleportGui {
                     } else {
                         lore.add(ChatColor.GREEN + "▶ Left-Click: " + ChatColor.WHITE + "Teleport to warp");
                         if (isOwner || isAdmin) {
-                            lore.add(ChatColor.YELLOW + "▶ Right-Click: " + ChatColor.WHITE + "Change warp icon");
-                            lore.add(ChatColor.RED + "▶ Shift + Right-Click: " + ChatColor.WHITE + "Delete warp");
+                            lore.add(ChatColor.YELLOW + "▶ Right-Click: " + ChatColor.WHITE + "Change warp icon (Admin)");
+                            lore.add(ChatColor.GOLD + "▶ Shift + Left-Click: " + ChatColor.WHITE + "Rename warp (Admin)");
+                            lore.add(ChatColor.RED + "▶ Shift + Right-Click: " + ChatColor.WHITE + "Delete warp (Admin)");
                         }
                     }
                     meta.setLore(lore);
@@ -405,25 +444,34 @@ public class TeleportGui {
 
     public static void openMyWarpsGui(StaffCore plugin, Player player) {
         UUID uuid = player.getUniqueId();
+        // Strictly personal warps only - never show other players' warps on this page, even for admins
         Set<String> myWarps = UtilityCommands.getPlayerWarps(uuid);
         int warpCount = myWarps.size();
         int maxWarps = UtilityCommands.getMaxWarps(player, plugin);
 
-        Inventory inv = Bukkit.createInventory(null, 54, MY_WARPS_GUI_PREFIX + player.getName());
+        String title = MY_WARPS_GUI_PREFIX + player.getName();
+        if (title.length() > 32) {
+            title = title.substring(0, 32);
+        }
+        Inventory inv = Bukkit.createInventory(null, 54, title);
 
+        // Fill bottom control bar
         ItemStack filler = createGrayPane();
         for (int i = 45; i < 54; i++) {
             inv.setItem(i, filler);
         }
 
+        // Slot 45: Back to Public Warps
         inv.setItem(45, createButton(Material.ARROW, "ARROW", (short) 0,
                 ChatColor.WHITE + ChatColor.BOLD.toString() + "◀ Public Warps",
                 Collections.singletonList(ChatColor.GRAY + "Return to the public warps explorer.")));
 
+        // Slot 49: Barrier Close Button
         inv.setItem(49, createButton(Material.BARRIER, "BARRIER", (short) 0,
                 ChatColor.RED + ChatColor.BOLD.toString() + "Close Menu",
                 Collections.singletonList(ChatColor.GRAY + "Click to close this window.")));
 
+        // Slot 51: Mode Switcher
         boolean bedrock = isBedrockMode(uuid);
         inv.setItem(51, createButton(
                 bedrock ? Material.COMPASS : matchCrossVersionMaterial("REDSTONE_TORCH", "REDSTONE_TORCH_ON"),
@@ -441,13 +489,16 @@ public class TeleportGui {
                         ChatColor.GREEN + "Click to toggle mode!"
                 )));
 
+        // Slot 53: Personal Warp limits counter
         String limitStr = (maxWarps == Integer.MAX_VALUE) ? "Unlimited" : String.valueOf(maxWarps);
         inv.setItem(53, createButton(Material.BOOK, "BOOK", (short) 0,
-                ChatColor.YELLOW + ChatColor.BOLD.toString() + "Warp Statistics",
+                ChatColor.YELLOW + ChatColor.BOLD.toString() + "Personal Warp Stats",
                 Arrays.asList(
-                        ChatColor.GRAY + "Warps Used: " + ChatColor.GOLD + warpCount + ChatColor.GRAY + " / " + ChatColor.YELLOW + limitStr,
+                        ChatColor.GRAY + "Your Warps: " + ChatColor.GOLD + warpCount + ChatColor.GRAY + " / " + ChatColor.YELLOW + limitStr,
                         ChatColor.GRAY + "Create warp: " + ChatColor.WHITE + "/setwarp <name>"
                 )));
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
         if (!myWarps.isEmpty()) {
             int slot = 0;
@@ -469,10 +520,19 @@ public class TeleportGui {
                         lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE + String.format("%.1f, %.1f, %.1f", loc.getX(), loc.getY(), loc.getZ()));
                     }
 
+                    // Display Owner info
+                    lore.add(ChatColor.GRAY + "Owner: " + ChatColor.GREEN + "You (" + player.getName() + ")");
+
                     if (isPrivate) {
                         lore.add(ChatColor.RED + "Visibility: Private " + ChatColor.DARK_GRAY + "(Only you can see/tp)");
                     } else {
                         lore.add(ChatColor.GREEN + "Visibility: Public " + ChatColor.GRAY + "(Everyone can see/tp)");
+                        long pubTime = UtilityCommands.getWarpPublicDate(warpName);
+                        if (pubTime > 0) {
+                            lore.add(ChatColor.GRAY + "Public Since: " + ChatColor.AQUA + sdf.format(new Date(pubTime)));
+                        } else {
+                            lore.add(ChatColor.GRAY + "Public Since: " + ChatColor.AQUA + "Server Origin");
+                        }
                     }
                     lore.add("");
 
@@ -493,17 +553,13 @@ public class TeleportGui {
             inv.setItem(22, createButton(Material.BOOK, "BOOK", (short) 0,
                     ChatColor.YELLOW + ChatColor.BOLD.toString() + "You have no personal warps!",
                     Arrays.asList(
-                            ChatColor.GRAY + "You haven't created any warps yet.",
+                            ChatColor.GRAY + "You haven't created any personal warps yet.",
                             ChatColor.GRAY + "Type " + ChatColor.YELLOW + "/setwarp <name>" + ChatColor.GRAY + " to create your own warp!"
                     )));
         }
 
         player.openInventory(inv);
     }
-
-    // =========================================================================
-    //                 BEDROCK / TOUCH WARP ACTIONS SUB-MENU
-    // =========================================================================
 
     public static void openWarpActionsMenu(StaffCore plugin, Player player, String warpName) {
         Inventory inv = Bukkit.createInventory(null, 27, WARP_ACTIONS_PREFIX + warpName);
@@ -514,30 +570,82 @@ public class TeleportGui {
         }
 
         boolean isPrivate = UtilityCommands.isWarpPrivate(warpName);
+        boolean isOwner = UtilityCommands.isWarpOwner(warpName, player.getUniqueId());
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
+        // Resolve Owner Name
+        UUID ownerUuid = UtilityCommands.warpOwners.get(warpName);
+        String ownerName = "Server";
+        if (ownerUuid != null) {
+            OfflinePlayer op = Bukkit.getOfflinePlayer(ownerUuid);
+            ownerName = (op != null && op.getName() != null) ? op.getName() : "Unknown";
+        }
+
+        long pubTime = UtilityCommands.getWarpPublicDate(warpName);
+        String pubSinceStr = pubTime > 0 ? sdf.format(new Date(pubTime)) : "Server Origin";
+
+        // Slot 4: Warp Overview & Metadata Header (Bedrock Sub-Menu)
+        ItemStack overviewItem = getIconItem(UtilityCommands.getWarpIcon(warpName));
+        ItemMeta overviewMeta = overviewItem.getItemMeta();
+        if (overviewMeta != null) {
+            overviewMeta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + warpName + (isPrivate ? ChatColor.RED + " [Private]" : ""));
+            List<String> overviewLore = new ArrayList<>();
+            Location loc = UtilityCommands.warps.get(warpName);
+            if (loc != null && loc.getWorld() != null) {
+                overviewLore.add(ChatColor.GRAY + "World: " + ChatColor.YELLOW + loc.getWorld().getName());
+                overviewLore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE + String.format("%.1f, %.1f, %.1f", loc.getX(), loc.getY(), loc.getZ()));
+            }
+
+            // Display Owner in Bedrock Sub-Menu
+            if (isOwner) {
+                overviewLore.add(ChatColor.GRAY + "Owner: " + ChatColor.GREEN + "You (" + player.getName() + ")");
+            } else {
+                overviewLore.add(ChatColor.GRAY + "Owner: " + ChatColor.YELLOW + ownerName);
+            }
+
+            // Display "Since when is this warp public" in Bedrock Sub-Menu
+            if (isPrivate) {
+                overviewLore.add(ChatColor.RED + "Status: Private " + ChatColor.DARK_GRAY + "(Hidden from public)");
+            } else {
+                overviewLore.add(ChatColor.GREEN + "Status: Public " + ChatColor.GRAY + "(Visible to all)");
+                overviewLore.add(ChatColor.GRAY + "Public Since: " + ChatColor.AQUA + pubSinceStr);
+            }
+
+            overviewMeta.setLore(overviewLore);
+            overviewItem.setItemMeta(overviewMeta);
+        }
+        inv.setItem(4, overviewItem);
+
+        // Slot 10: Teleport Button
         inv.setItem(10, createButton(
                 matchCrossVersionMaterial("ENDER_PEARL", "ENDER_PEARL"), "ENDER_PEARL", (short) 0,
                 ChatColor.GREEN + ChatColor.BOLD.toString() + "Teleport",
-                Arrays.asList(ChatColor.GRAY + "Teleport instantly to " + ChatColor.GOLD + warpName + ChatColor.GRAY + ".")));
+                Arrays.asList(
+                        ChatColor.GRAY + "Teleport instantly to " + ChatColor.GOLD + warpName + ChatColor.GRAY + ".",
+                        ChatColor.GRAY + "Owner: " + (isOwner ? ChatColor.GREEN + "You" : ChatColor.YELLOW + ownerName),
+                        !isPrivate ? ChatColor.GRAY + "Public Since: " + ChatColor.AQUA + pubSinceStr : ChatColor.RED + "Status: Private"
+                )));
 
+        // Slot 12: Change Icon Button
         inv.setItem(12, createButton(
                 Material.PAINTING, "PAINTING", (short) 0,
                 ChatColor.YELLOW + ChatColor.BOLD.toString() + "Change Icon",
                 Arrays.asList(ChatColor.GRAY + "Pick a custom icon for " + ChatColor.GOLD + warpName + ChatColor.GRAY + ".")));
 
+        // Slot 14: Rename Button
         inv.setItem(14, createButton(
                 matchCrossVersionMaterial("NAME_TAG", "NAME_TAG"), "NAME_TAG", (short) 0,
                 ChatColor.GOLD + ChatColor.BOLD.toString() + "Rename Warp",
                 Arrays.asList(ChatColor.GRAY + "Type a new name in chat for " + ChatColor.GOLD + warpName + ChatColor.GRAY + ".")));
 
-        // Slot 15: Toggle Visibility
+        // Slot 15: Toggle Public / Private Visibility
         if (isPrivate) {
             inv.setItem(15, createButton(
                     matchCrossVersionMaterial("FERMENTED_SPIDER_EYE", "REDSTONE_TORCH_ON"), "FERMENTED_SPIDER_EYE", (short) 0,
                     ChatColor.RED + ChatColor.BOLD.toString() + "Visibility: Private",
                     Arrays.asList(
                             ChatColor.GRAY + "Currently: " + ChatColor.RED + "Private (Hidden)",
-                            ChatColor.GRAY + "Only you and staff can see or use this warp.",
+                            ChatColor.GRAY + "Only owner and staff can view/use this warp.",
                             "",
                             ChatColor.YELLOW + "Click to make " + ChatColor.GREEN + ChatColor.BOLD.toString() + "PUBLIC" + ChatColor.YELLOW + "!"
                     )));
@@ -547,21 +655,23 @@ public class TeleportGui {
                     ChatColor.GREEN + ChatColor.BOLD.toString() + "Visibility: Public",
                     Arrays.asList(
                             ChatColor.GRAY + "Currently: " + ChatColor.GREEN + "Public (Visible to all)",
-                            ChatColor.GRAY + "Anyone can view and teleport to this warp.",
+                            ChatColor.GRAY + "Public Since: " + ChatColor.AQUA + pubSinceStr,
                             "",
                             ChatColor.YELLOW + "Click to make " + ChatColor.RED + ChatColor.BOLD.toString() + "PRIVATE" + ChatColor.YELLOW + "!"
                     )));
         }
 
+        // Slot 16: Delete Button
         inv.setItem(16, createButton(
                 matchCrossVersionMaterial("REDSTONE_BLOCK", "REDSTONE_BLOCK"), "REDSTONE_BLOCK", (short) 0,
                 ChatColor.RED + ChatColor.BOLD.toString() + "Delete Warp",
                 Arrays.asList(ChatColor.GRAY + "Permanently remove warp " + ChatColor.GOLD + warpName + ChatColor.GRAY + ".")));
 
+        // Slot 22: Back Button
         inv.setItem(22, createButton(
                 Material.ARROW, "ARROW", (short) 0,
-                ChatColor.WHITE + ChatColor.BOLD.toString() + "◀ Back to My Warps",
-                Collections.singletonList(ChatColor.GRAY + "Return to your personal warps list.")));
+                ChatColor.WHITE + ChatColor.BOLD.toString() + "◀ Back",
+                Collections.singletonList(ChatColor.GRAY + "Return to previous menu.")));
 
         player.openInventory(inv);
     }
@@ -583,6 +693,7 @@ public class TeleportGui {
             inv.setItem(i, ICON_CHOICES.get(i).createItem(currentIcon));
         }
 
+        // Slot 22: Back Button
         inv.setItem(22, createButton(
                 Material.ARROW, "ARROW", (short) 0,
                 ChatColor.WHITE + ChatColor.BOLD.toString() + "◀ Back",
@@ -604,6 +715,26 @@ public class TeleportGui {
             }
         }
         return createCrossVersionItem("ENDER_EYE", "EYE_OF_ENDER", (short) 0);
+    }
+
+    public static ItemStack createSkullItem() {
+        try {
+            Material mat = Material.valueOf("PLAYER_HEAD");
+            return new ItemStack(mat);
+        } catch (IllegalArgumentException e) {
+            return new ItemStack(Material.valueOf("SKULL_ITEM"), 1, (short) 3);
+        }
+    }
+
+    public static void setSkullOwner(SkullMeta meta, OfflinePlayer target, String targetName) {
+        try {
+            Method m = meta.getClass().getMethod("setOwningPlayer", OfflinePlayer.class);
+            m.invoke(meta, target);
+        } catch (Throwable t) {
+            try {
+                meta.setOwner(targetName);
+            } catch (Throwable ignored) {}
+        }
     }
 
     private static ItemStack createGrayPane() {
