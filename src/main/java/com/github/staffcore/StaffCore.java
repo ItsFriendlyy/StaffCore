@@ -82,10 +82,14 @@ public final class StaffCore extends JavaPlugin {
             getLogger().warning("Could not initialize bStats metrics: " + t.getMessage());
         }
 
-        // 6. External Hooks (PlaceholderAPI & Simple Voice Chat)
-        PlaceholderHook.tryRegister(this);
-        VoicechatHook.tryRegister(this);
+        // 6. External Hooks (PlaceholderAPI & Simple Voice Chat - optional soft dependencies)
+        try {
+            PlaceholderHook.tryRegister(this);
+        } catch (Throwable ignored) {}
 
+        try {
+            VoicechatHook.tryRegister(this);
+        } catch (Throwable ignored) {}
         // 7. Register Commands & Tab Completers
         registerCommands();
 

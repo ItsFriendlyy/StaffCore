@@ -2,7 +2,7 @@ name: StaffCore
 version: 1.3.1
 main: com.github.staffcore.StaffCore
 api-version: 1.20
-author: StaffCoreDev
+author: ItsFriendlyy
 description: Complete Management & Moderation Suite with GUI, Vanish, Freeze, Jail, Spawn, Warps, Homes, BungeeCord, and Utilities.
 softdepend: [BungeeCord, PlaceholderAPI, voicechat]
 

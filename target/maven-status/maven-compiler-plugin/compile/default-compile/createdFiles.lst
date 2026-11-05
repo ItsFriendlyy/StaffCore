@@ -3,6 +3,7 @@ com/github/staffcore/commands/FreezeCommand.class
 com/github/staffcore/commands/PhaseCommand.class
 com/github/staffcore/listeners/GuiListener.class
 com/github/staffcore/StaffCore.class
+com/github/staffcore/hooks/VoicechatHook$VoicechatRegistrar.class
 com/github/staffcore/freeze/FreezeManager.class
 com/github/staffcore/listeners/VanishListener.class
 com/github/staffcore/hooks/StaffCoreExpansion.class
