@@ -643,7 +643,6 @@ public class UtilityCommands implements CommandExecutor {
             case "effect":
                 return handleEffect(sender, args);
             case "cleargrounditems":
-            case "cleargrouditems":
             case "clearitems":
             case "clearlag":
                 return handleClearGroundItems(sender);

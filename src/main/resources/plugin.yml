@@ -1,5 +1,5 @@
 name: StaffCore
-version: 1.3.1
+version: 1.3.2
 main: com.github.staffcore.StaffCore
 api-version: 1.13
 author: ItsFriendlyy
@@ -217,7 +217,7 @@ commands:
     permission: staffcore.command.effect
   cleargrounditems:
     description: Cleans up all dropped item entities across all loaded worlds.
-    aliases: [cleargrouditems, clearitems, clearlag]
+    aliases: [clearitems, clearlag]
     usage: /cleargrounditems
     permission: staffcore.command.cleargrounditems
   clear:

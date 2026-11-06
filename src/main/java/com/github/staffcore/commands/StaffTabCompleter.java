@@ -63,7 +63,7 @@ public class StaffTabCompleter implements TabCompleter {
         // 2. Commands without tab completion (including /sethome, /setwarp, and /phase)
         if (cmd.equals("vanish") || cmd.equals("v") || cmd.equals("repair") || cmd.equals("setjail") || cmd.equals("setspawn") ||
             cmd.equals("sethome") || cmd.equals("setwarp") ||
-            cmd.equals("cleargrounditems") || cmd.equals("cleargrouditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
+            cmd.equals("cleargrounditems") || cmd.equals("clearitems") || cmd.equals("clearlag")) {
             return Collections.emptyList();
         }
 

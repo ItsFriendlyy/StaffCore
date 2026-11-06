@@ -30,6 +30,7 @@ public class TeleportGui {
 
     // Track players who prefer Touch/Bedrock sub-menu mode over Direct Java mode
     public static final Set<UUID> bedrockModePlayers = new HashSet<>();
+    public static final Map<UUID, Boolean> bedrockModeOverrides = new HashMap<>();
 
     // Temporary chat input tracking for renaming homes and warps
     public static final Map<UUID, String> renamingHomeMap = new HashMap<>();
@@ -90,15 +91,72 @@ public class TeleportGui {
             new IconChoice("star", "Sacred Shrine", "NETHER_STAR", "NETHER_STAR", (short) 0)
     ));
 
+    /**
+     * Automatically detects whether a player is connecting from Bedrock Edition via Floodgate
+     * or by checking their username prefix (e.g. '.').
+     */
+    public static boolean isBedrockPlayer(Player player) {
+        if (player == null) return false;
+
+        // 1. Direct Floodgate API reflection check (zero compile-time dependency, works on all versions)
+        try {
+            if (Bukkit.getPluginManager().isPluginEnabled("floodgate")) {
+                Class<?> floodgateApiClass = Class.forName("org.geysermc.floodgate.api.FloodgateApi");
+                Method getInstanceMethod = floodgateApiClass.getMethod("getInstance");
+                Object apiInstance = getInstanceMethod.invoke(null);
+                if (apiInstance != null) {
+                    Method isFloodgatePlayerMethod = floodgateApiClass.getMethod("isFloodgatePlayer", UUID.class);
+                    Object result = isFloodgatePlayerMethod.invoke(apiInstance, player.getUniqueId());
+                    if (result instanceof Boolean && (Boolean) result) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // Floodgate API reflection fallback
+        }
+
+        // 2. Geyser/Floodgate username prefix fallback (default prefix is '.' or '*')
+        String name = player.getName();
+        if (name != null && (name.startsWith(".") || name.startsWith("*"))) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static boolean isBedrockMode(UUID uuid) {
+        if (bedrockModeOverrides.containsKey(uuid)) {
+            return bedrockModeOverrides.get(uuid);
+        }
+        Player player = Bukkit.getPlayer(uuid);
+        if (player != null) {
+            return isBedrockMode(player);
+        }
         return bedrockModePlayers.contains(uuid);
     }
 
-    public static void toggleBedrockMode(UUID uuid) {
+    public static boolean isBedrockMode(Player player) {
+        if (player == null) return false;
+        UUID uuid = player.getUniqueId();
+        if (bedrockModeOverrides.containsKey(uuid)) {
+            return bedrockModeOverrides.get(uuid);
+        }
         if (bedrockModePlayers.contains(uuid)) {
-            bedrockModePlayers.remove(uuid);
-        } else {
+            return true;
+        }
+        return isBedrockPlayer(player);
+    }
+
+    public static void toggleBedrockMode(UUID uuid) {
+        Player player = Bukkit.getPlayer(uuid);
+        boolean current = (player != null) ? isBedrockMode(player) : isBedrockMode(uuid);
+        boolean next = !current;
+        bedrockModeOverrides.put(uuid, next);
+        if (next) {
             bedrockModePlayers.add(uuid);
+        } else {
+            bedrockModePlayers.remove(uuid);
         }
     }
 
@@ -126,7 +184,7 @@ public class TeleportGui {
                 Collections.singletonList(ChatColor.GRAY + "Click to close this window.")));
 
         // Slot 51: Mode Switcher toggle
-        boolean bedrock = isBedrockMode(uuid);
+        boolean bedrock = isBedrockMode(player);
         inv.setItem(51, createButton(
                 bedrock ? Material.COMPASS : matchCrossVersionMaterial("REDSTONE_TORCH", "REDSTONE_TORCH_ON"),
                 bedrock ? "COMPASS" : "REDSTONE_TORCH_ON",
@@ -283,7 +341,7 @@ public class TeleportGui {
         Collections.sort(visibleWarps);
 
         int totalWarps = visibleWarps.size();
-        int itemsPerPage = 28;
+        int itemsPerPage = 45; // Starts at row 1 slot 1 (slot 0) and fills through slot 44
         int maxPages = Math.max(1, (int) Math.ceil((double) totalWarps / itemsPerPage));
         int currentPage = Math.max(1, Math.min(page, maxPages));
 
@@ -293,7 +351,7 @@ public class TeleportGui {
         }
         Inventory inv = Bukkit.createInventory(null, 54, title);
 
-        // Fill bottom control bar
+        // Fill bottom control bar (Slots 45 to 53)
         ItemStack filler = createGrayPane();
         for (int i = 45; i < 54; i++) {
             inv.setItem(i, filler);
@@ -331,7 +389,7 @@ public class TeleportGui {
                 Collections.singletonList(ChatColor.GRAY + "Click to close this window.")));
 
         // Slot 51: Mode Switcher / Bedrock Mode Toggle
-        boolean bedrock = isBedrockMode(uuid);
+        boolean bedrock = isBedrockMode(player);
         inv.setItem(51, createButton(
                 bedrock ? Material.COMPASS : matchCrossVersionMaterial("REDSTONE_TORCH", "REDSTONE_TORCH_ON"),
                 bedrock ? "COMPASS" : "REDSTONE_TORCH_ON",
@@ -351,20 +409,13 @@ public class TeleportGui {
                     Collections.singletonList(ChatColor.GRAY + "View more warps.")));
         }
 
-        // Available slots layout (4 rows of 7 items)
-        int[] availableSlots = {
-                10, 11, 12, 13, 14, 15, 16,
-                19, 20, 21, 22, 23, 24, 25,
-                28, 29, 30, 31, 32, 33, 34,
-                37, 38, 39, 40, 41, 42, 43
-        };
-
+        // Warps start at the first row, first slot (slot 0) exactly like My Warps!
         int startIndex = (currentPage - 1) * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalWarps);
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
         if (totalWarps > 0) {
-            int slotIdx = 0;
+            int slot = 0;
             for (int i = startIndex; i < endIndex; i++) {
                 String warpName = visibleWarps.get(i);
                 Location loc = UtilityCommands.warps.get(warpName);
@@ -424,7 +475,7 @@ public class TeleportGui {
                     meta.setLore(lore);
                     iconItem.setItemMeta(meta);
                 }
-                inv.setItem(availableSlots[slotIdx++], iconItem);
+                inv.setItem(slot++, iconItem);
             }
         } else {
             inv.setItem(22, createButton(Material.BOOK, "BOOK", (short) 0,
@@ -472,7 +523,7 @@ public class TeleportGui {
                 Collections.singletonList(ChatColor.GRAY + "Click to close this window.")));
 
         // Slot 51: Mode Switcher
-        boolean bedrock = isBedrockMode(uuid);
+        boolean bedrock = isBedrockMode(player);
         inv.setItem(51, createButton(
                 bedrock ? Material.COMPASS : matchCrossVersionMaterial("REDSTONE_TORCH", "REDSTONE_TORCH_ON"),
                 bedrock ? "COMPASS" : "REDSTONE_TORCH_ON",
