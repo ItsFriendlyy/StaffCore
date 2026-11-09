@@ -2,6 +2,7 @@ package com.github.staffcore.punishment;
 
 import com.github.staffcore.StaffCore;
 import com.github.staffcore.database.DatabaseManager;
+import com.github.staffcore.util.IpPrivacyManager;
 import com.github.staffcore.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -157,8 +158,8 @@ public class PunishmentManager {
         }
 
         for (Player p : Bukkit.getOnlinePlayers()) {
-            if (p.getAddress() != null && p.getAddress().getAddress() != null) {
-                cachePlayerIp(p.getUniqueId(), p.getName(), p.getAddress().getAddress().getHostAddress());
+            if (p != null) {
+                cachePlayerIp(p.getUniqueId(), p.getName(), IpPrivacyManager.getHashedIp(p));
             }
         }
     }
@@ -292,8 +293,8 @@ public class PunishmentManager {
         }
 
         Player online = targetUUID != null ? Bukkit.getPlayer(targetUUID) : Bukkit.getPlayerExact(targetName);
-        String ip = (online != null && online.getAddress() != null && online.getAddress().getAddress() != null)
-                ? online.getAddress().getAddress().getHostAddress() : getLastKnownIp(targetUUID);
+        String ip = (online != null)
+                ? IpPrivacyManager.getHashedIp(online) : getLastKnownIp(targetUUID);
         PunishmentType type = duration > 0 ? PunishmentType.TEMP_JAIL : PunishmentType.JAIL;
         Punishment created = createPunishment(targetUUID, targetName, ip != null ? ip : "", staffName, type, reason, duration, silent);
 
@@ -393,10 +394,12 @@ public class PunishmentManager {
 
     public void cachePlayerIp(UUID uuid, String name, String ip) {
         if (uuid == null || ip == null || ip.isEmpty()) return;
-        ipHistory.put(uuid, ip);
+        String hashed = (ip.length() == 64 && ip.matches("[0-9a-fA-F]+")) ? ip : IpPrivacyManager.hashIp(ip);
+        if (hashed == null || hashed.isEmpty()) return;
+        ipHistory.put(uuid, hashed);
         if (name != null && !name.isEmpty()) {
             uuidToName.put(uuid, name);
-            nameToIpHistory.put(name.toLowerCase(), ip);
+            nameToIpHistory.put(name.toLowerCase(), hashed);
         }
         saveData();
     }
@@ -413,7 +416,8 @@ public class PunishmentManager {
 
     public List<String> getAccountsByIp(String ip) {
         if (ip == null || ip.trim().isEmpty()) return Collections.emptyList();
-        String cleanIp = ip.trim();
+        String cleanIp = (ip.length() == 64 && ip.matches("[0-9a-fA-F]+")) ? ip.trim() : IpPrivacyManager.hashIp(ip.trim());
+        if (cleanIp == null) cleanIp = ip.trim();
         Set<String> accounts = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
         for (Map.Entry<UUID, String> entry : ipHistory.entrySet()) {
@@ -445,10 +449,8 @@ public class PunishmentManager {
         }
 
         for (Player online : Bukkit.getOnlinePlayers()) {
-            if (online.getAddress() != null && online.getAddress().getAddress() != null) {
-                if (cleanIp.equalsIgnoreCase(online.getAddress().getAddress().getHostAddress())) {
-                    accounts.add(online.getName());
-                }
+            if (cleanIp.equalsIgnoreCase(IpPrivacyManager.getHashedIp(online))) {
+                accounts.add(online.getName());
             }
         }
 
@@ -492,14 +494,13 @@ public class PunishmentManager {
 
         // 2. IP Ban: kick ALL players sharing that IP address
         if (type == PunishmentType.IP_BAN || type == PunishmentType.TEMP_IP_BAN) {
-            final String banIp = targetIp;
+            final String banIp = (targetIp != null && targetIp.length() == 64 && targetIp.matches("[0-9a-fA-F]+"))
+                    ? targetIp : IpPrivacyManager.hashIp(targetIp);
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if (player.getAddress() != null) {
-                    String playerIp = player.getAddress().getAddress().getHostAddress();
-                    if (playerIp.equalsIgnoreCase(banIp) || (targetUUID != null && player.getUniqueId().equals(targetUUID))) {
-                        final Player kickTarget = player;
-                        Bukkit.getScheduler().runTask(plugin, () -> kickTarget.kickPlayer(getBanKickMessage(p)));
-                    }
+                String playerIp = IpPrivacyManager.getHashedIp(player);
+                if ((banIp != null && playerIp != null && banIp.equalsIgnoreCase(playerIp)) || (targetUUID != null && player.getUniqueId().equals(targetUUID))) {
+                    final Player kickTarget = player;
+                    Bukkit.getScheduler().runTask(plugin, () -> kickTarget.kickPlayer(getBanKickMessage(p)));
                 }
             }
         }
@@ -536,8 +537,10 @@ public class PunishmentManager {
 
         UUID targetUUID = target.getUniqueId();
         String targetName = target.getName();
-        String ip = (target.getAddress() != null && target.getAddress().getAddress() != null)
-                ? target.getAddress().getAddress().getHostAddress() : getLastKnownIp(targetUUID);
+        String ip = IpPrivacyManager.getHashedIp(target);
+        if (ip == null || ip.isEmpty()) {
+            ip = getLastKnownIp(targetUUID);
+        }
 
         Punishment p = new Punishment(UUID.randomUUID(), targetUUID, targetName, ip != null ? ip : "",
                 staffName, PunishmentType.KICK, reason, System.currentTimeMillis(), -1, -1, false);
@@ -608,7 +611,7 @@ public class PunishmentManager {
             if (p.getType() != PunishmentType.IP_BAN && p.getType() != PunishmentType.TEMP_IP_BAN) continue;
 
             boolean matchName = p.getTargetName() != null && p.getTargetName().equalsIgnoreCase(input);
-            boolean matchIp = p.getTargetIp() != null && p.getTargetIp().equalsIgnoreCase(input);
+            boolean matchIp = p.getTargetIp() != null && (p.getTargetIp().equalsIgnoreCase(input) || p.getTargetIp().equalsIgnoreCase(IpPrivacyManager.hashIp(input)));
 
             if (matchName || matchIp) {
                 p.setActive(false);
@@ -683,9 +686,10 @@ public class PunishmentManager {
 
     public Punishment getActiveIpBan(String ip) {
         if (ip == null || ip.isEmpty()) return null;
+        String hashed = (ip.length() == 64 && ip.matches("[0-9a-fA-F]+")) ? ip : IpPrivacyManager.hashIp(ip);
         for (Punishment p : punishments) {
             if (p.isActive() && (p.getType() == PunishmentType.IP_BAN || p.getType() == PunishmentType.TEMP_IP_BAN)) {
-                if (p.getTargetIp() != null && p.getTargetIp().equalsIgnoreCase(ip)) {
+                if (p.getTargetIp() != null && (p.getTargetIp().equalsIgnoreCase(ip) || (hashed != null && p.getTargetIp().equalsIgnoreCase(hashed)))) {
                     if (p.isExpired()) {
                         p.setActive(false);
                         saveData();

@@ -3,6 +3,7 @@ package com.github.staffcore.gui;
 import com.github.staffcore.StaffCore;
 import com.github.staffcore.punishment.Punishment;
 import com.github.staffcore.punishment.PunishmentType;
+import com.github.staffcore.util.IpPrivacyManager;
 import com.github.staffcore.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -54,11 +55,11 @@ public class CheckGui {
             inv.setItem(i, filler);
         }
 
-        // Resolve player's IP address (online or last known)
+        // Resolve player's anonymous hashed IP identifier (online or last known)
         String targetIp = "";
         Player onlineTarget = (target != null) ? target.getPlayer() : null;
-        if (onlineTarget != null && onlineTarget.isOnline() && onlineTarget.getAddress() != null && onlineTarget.getAddress().getAddress() != null) {
-            targetIp = onlineTarget.getAddress().getAddress().getHostAddress();
+        if (onlineTarget != null && onlineTarget.isOnline()) {
+            targetIp = IpPrivacyManager.getHashedIp(onlineTarget);
         } else {
             String savedIp = (target != null && target.getUniqueId() != null) ? plugin.getPunishmentManager().getLastKnownIp(target.getUniqueId()) : null;
             if (savedIp == null || savedIp.isEmpty()) {
@@ -81,29 +82,25 @@ public class CheckGui {
                 lore.add(ChatColor.GRAY + "UUID: " + ChatColor.WHITE + target.getUniqueId());
             }
 
-            if (staff.hasPermission("staffcore.check.ip") || staff.isOp()) {
-                if (revealIp) {
-                    String ipDisplay = (targetIp != null && !targetIp.isEmpty()) ? targetIp : "Unknown";
-                    lore.add(ChatColor.GRAY + "IP: " + ChatColor.YELLOW + ipDisplay + ChatColor.DARK_GRAY + " (Right-Click to hide)");
-                } else {
-                    lore.add(ChatColor.GRAY + "IP: " + ChatColor.RED + "" + ChatColor.BOLD + "[HIDDEN] " + ChatColor.YELLOW + "(Right-Click to reveal)");
+            // Show linked alt accounts securely (zero IP address exposure)
+            List<String> altAccounts = new ArrayList<>();
+            if (targetIp != null && !targetIp.isEmpty()) {
+                altAccounts.addAll(plugin.getPunishmentManager().getAccountsByIp(targetIp));
+            }
+            boolean containsSelf = false;
+            for (String acc : altAccounts) {
+                if (acc.equalsIgnoreCase(targetName)) {
+                    containsSelf = true;
+                    break;
                 }
+            }
+            if (!containsSelf && !targetName.equals("Unknown")) {
+                altAccounts.add(0, targetName);
+            }
 
-                // Show all accounts that have logged in from this IP location
-                List<String> altAccounts = new ArrayList<>(plugin.getPunishmentManager().getAccountsByIp(targetIp));
-                boolean containsSelf = false;
-                for (String acc : altAccounts) {
-                    if (acc.equalsIgnoreCase(targetName)) {
-                        containsSelf = true;
-                        break;
-                    }
-                }
-                if (!containsSelf && !targetName.equals("Unknown")) {
-                    altAccounts.add(0, targetName);
-                }
-
+            if (altAccounts.size() > 1) {
                 lore.add("");
-                lore.add(ChatColor.GOLD + "" + ChatColor.BOLD + "Accounts on this IP (" + altAccounts.size() + "):");
+                lore.add(ChatColor.GOLD + "" + ChatColor.BOLD + "Linked Alt Accounts (" + altAccounts.size() + "):");
                 for (String acc : altAccounts) {
                     lore.add(ChatColor.DARK_GRAY + " » " + ChatColor.WHITE + acc);
                 }
@@ -158,7 +155,7 @@ public class CheckGui {
                         ChatColor.GRAY + "K/D Ratio: " + ChatColor.GOLD + kd
                 )));
 
-        // Retrieve full comprehensive punishment history (UUID + Name + IP + Alts)
+        // Retrieve full comprehensive punishment history (UUID + Name + Hashed IP + Alts)
         List<Punishment> history = getPlayerPunishments(plugin, target, targetName);
 
         int totalBans = 0;
@@ -414,7 +411,7 @@ public class CheckGui {
     }
 
     /**
-     * Resolves all punishment records for the target player using UUID, Name, IP, and Alt Accounts.
+     * Resolves all punishment records for the target player using UUID, Name, Hashed IP, and Alt Accounts.
      */
     public static List<Punishment> getPlayerPunishments(StaffCore plugin, OfflinePlayer target, String targetName) {
         List<Punishment> matched = new ArrayList<>();
@@ -424,10 +421,10 @@ public class CheckGui {
         String cleanTargetName = (targetName != null && !targetName.isEmpty() && !targetName.equalsIgnoreCase("Unknown"))
                 ? targetName : ((target != null && target.getName() != null) ? target.getName() : null);
 
-        // Fetch target IP address
+        // Fetch target anonymous hashed IP identifier
         String targetIp = null;
-        if (target != null && target.isOnline() && target.getPlayer() != null && target.getPlayer().getAddress() != null) {
-            targetIp = target.getPlayer().getAddress().getAddress().getHostAddress();
+        if (target != null && target.isOnline() && target.getPlayer() != null) {
+            targetIp = IpPrivacyManager.getHashedIp(target.getPlayer());
         }
         if ((targetIp == null || targetIp.isEmpty()) && targetUUID != null) {
             targetIp = plugin.getPunishmentManager().getLastKnownIp(targetUUID);
@@ -448,10 +445,10 @@ public class CheckGui {
             // 2. Name Match (case-insensitive)
             boolean nameMatch = (cleanTargetName != null && p.getTargetName() != null && p.getTargetName().equalsIgnoreCase(cleanTargetName));
 
-            // 3. IP Match
+            // 3. IP Hash Match
             boolean ipMatch = (targetIp != null && !targetIp.isEmpty() && p.getTargetIp() != null && p.getTargetIp().equalsIgnoreCase(targetIp));
 
-            // 4. Punishment targetName is the IP itself
+            // 4. Punishment targetName is the IP hash itself
             boolean nameIsIpMatch = (targetIp != null && !targetIp.isEmpty() && p.getTargetName() != null && p.getTargetName().equalsIgnoreCase(targetIp));
 
             // 5. Alt account match

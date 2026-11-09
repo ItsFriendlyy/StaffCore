@@ -203,12 +203,7 @@ jail:
   unjail-target: "&aYou have been released from jail and returned to your previous position!"
 #VANISH CONFIGURATIONS
 vanish:
-  # Enable or disable fake leave/join broadcast messages
-  # Default: true (broadcasting enabled)
-  # Set to false if you want completely silent vanish without any chat messages
   fake-messages:
     enabled: true
-    # Broadcasted to the server when you vanish (turn vanish ON)
     quit: "&e%player% left the game"
-    # Broadcasted to the server when you unvanish (turn vanish OFF)
     join: "&e%player% joined the game"

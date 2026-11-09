@@ -21,6 +21,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.ServerListPingEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.metadata.FixedMetadataValue;
 
 import java.util.Map;
 import java.util.UUID;
@@ -36,18 +37,48 @@ public class VanishListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
-    public void onJoin(PlayerJoinEvent event) {
-        plugin.getVanishManager().onPlayerJoin(event.getPlayer());
+    // LOWEST runs first: marks metadata so DesignCore skips broadcasting, and silences vanilla join
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onJoinEarly(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
+            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
+            event.setJoinMessage(null);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onJoinLate(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
+            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
+            event.setJoinMessage(null);
+        }
+        plugin.getVanishManager().onPlayerJoin(player);
+    }
+
+    // LOWEST runs first: marks metadata so DesignCore skips quit broadcast, and silences vanilla quit
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onQuitEarly(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
+            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
+            event.setQuitMessage(null);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onQuitLate(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
+            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
+            event.setQuitMessage(null);
+        }
+        plugin.getVanishManager().onPlayerQuit(player);
+        activeSilentContainers.remove(player.getUniqueId());
     }
 
     @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getVanishManager().onPlayerQuit(event.getPlayer());
-        activeSilentContainers.remove(event.getPlayer().getUniqueId());
-    }
-
-   @EventHandler
     public void onPing(ServerListPingEvent event) {
         int vanishedCount = plugin.getVanishManager().getVanishedCount();
         if (vanishedCount > 0) {
@@ -116,7 +147,6 @@ public class VanishListener implements Listener {
         String title = SILENT_CONTAINER_PREFIX + friendlyName;
         if (title.length() > 32) title = title.substring(0, 32);
 
-        // Open an unlinked custom mirror view so the chest block lid NEVER opens on client screens
         Inventory silentView = Bukkit.createInventory(player, targetInv.getSize(), title);
         silentView.setContents(targetInv.getContents());
 

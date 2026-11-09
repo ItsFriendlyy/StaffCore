@@ -31,6 +31,7 @@ com/github/staffcore/commands/PunishCommands.class
 com/github/staffcore/commands/UtilityCommands.class
 com/github/staffcore/staffchat/StaffChatManager.class
 com/github/staffcore/commands/VanishCommand.class
+com/github/staffcore/util/IpPrivacyManager.class
 com/github/staffcore/listeners/UtilityListener.class
 com/github/staffcore/util/UpdateChecker.class
 com/github/staffcore/vanish/VanishManager.class

@@ -23,6 +23,7 @@
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/PunishmentListener.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/hooks/StaffCoreVoicechatPlugin.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/vanish/VanishManager.java
+/workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/util/IpPrivacyManager.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/hooks/VoicechatHook.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/listeners/UtilityListener.java
 /workspaces/Friendly-s-Management-/src/main/java/com/github/staffcore/punishment/PunishmentManager.java

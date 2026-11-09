@@ -6,6 +6,8 @@ import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -99,6 +101,9 @@ public class VanishManager {
             player.sendMessage(plugin.getMessageManager().color(
                     plugin.getConfig().getString("vanish.enabled", "&aYou are now vanished!")));
 
+            // Broadcast fake leave matching DesignCore formatting
+            broadcastFakeLeave(player);
+
             // Suggest /phase command in chat when vanishing
             String phaseTip = plugin.getConfig().getString("vanish.phase-suggestion",
                     "&7Tip: You can use &e/phase &7to phase through blocks without spectator mode!");
@@ -128,11 +133,88 @@ public class VanishManager {
             player.sendMessage(plugin.getMessageManager().color(
                     plugin.getConfig().getString("vanish.disabled", "&cYou are no longer vanished!")));
 
+            // Broadcast fake join matching DesignCore formatting
+            broadcastFakeJoin(player);
+
             String staffAlert = plugin.getMessageManager().color(
                     plugin.getConfig().getString("vanish.staff-notify-unvanish", "&8[&bVanish&8] &e%player% &7is now visible.")
                             .replace("%player%", player.getName()));
             notifyStaff(staffAlert, player);
         }
+    }
+
+    private void broadcastFakeLeave(Player player) {
+        // 1. Mark metadata on player so DesignCore knows this player is vanished
+        player.setMetadata("vanished", new FixedMetadataValue(this.plugin, true));
+
+        // Check if fake messages are enabled in config.yml (default: true)
+        if (!plugin.getConfig().getBoolean("vanish.fake-messages.enabled", plugin.getConfig().getBoolean("vanish.fake-messages", true))) {
+            return;
+        }
+
+        // 2. Broadcast fake leave matching DesignCore formatting if present
+        try {
+            Plugin designCore = Bukkit.getPluginManager().getPlugin("DesignCore");
+            if (designCore != null && designCore.isEnabled()) {
+                Class<?> listenerClass = Class.forName("com.itsfriendly.designcore.listener.PlayerConnectionListener");
+                Method buildNameMethod = listenerClass.getMethod("buildFormattedName", Player.class);
+                Object formatted = buildNameMethod.invoke(null, player);
+
+                Class<?> mainClass = Class.forName("com.itsfriendly.designcore.DesignCore");
+                Method colorMethod = mainClass.getMethod("color", String.class);
+
+                Object prefix = colorMethod.invoke(null, "&8[&c-&8] ");
+                Object suffix = colorMethod.invoke(null, " &7left the game.");
+
+                Method appendMethod = prefix.getClass().getMethod("append", Class.forName("net.kyori.adventure.text.Component"));
+                Object step1 = appendMethod.invoke(prefix, formatted);
+                Object fullMessage = appendMethod.invoke(step1, suffix);
+
+                Method broadcastMethod = Bukkit.class.getMethod("broadcast", Class.forName("net.kyori.adventure.text.Component"));
+                broadcastMethod.invoke(null, fullMessage);
+                return;
+            }
+        } catch (Throwable ignored) {}
+
+        // Fallback if DesignCore is not loaded
+        Bukkit.broadcastMessage(ChatColor.YELLOW + player.getName() + " left the game");
+    }
+
+    private void broadcastFakeJoin(Player player) {
+        // 1. Remove metadata so DesignCore treats player as unvanished
+        player.removeMetadata("vanished", this.plugin);
+
+        // Check if fake messages are enabled in config.yml (default: true)
+        if (!plugin.getConfig().getBoolean("vanish.fake-messages.enabled", plugin.getConfig().getBoolean("vanish.fake-messages", true))) {
+            return;
+        }
+
+        // 2. Broadcast fake join matching DesignCore formatting if present
+        try {
+            Plugin designCore = Bukkit.getPluginManager().getPlugin("DesignCore");
+            if (designCore != null && designCore.isEnabled()) {
+                Class<?> listenerClass = Class.forName("com.itsfriendly.designcore.listener.PlayerConnectionListener");
+                Method buildNameMethod = listenerClass.getMethod("buildFormattedName", Player.class);
+                Object formatted = buildNameMethod.invoke(null, player);
+
+                Class<?> mainClass = Class.forName("com.itsfriendly.designcore.DesignCore");
+                Method colorMethod = mainClass.getMethod("color", String.class);
+
+                Object prefix = colorMethod.invoke(null, "&8[&a+&8] ");
+                Object suffix = colorMethod.invoke(null, " &7joined the game.");
+
+                Method appendMethod = prefix.getClass().getMethod("append", Class.forName("net.kyori.adventure.text.Component"));
+                Object step1 = appendMethod.invoke(prefix, formatted);
+                Object fullMessage = appendMethod.invoke(step1, suffix);
+
+                Method broadcastMethod = Bukkit.class.getMethod("broadcast", Class.forName("net.kyori.adventure.text.Component"));
+                broadcastMethod.invoke(null, fullMessage);
+                return;
+            }
+        } catch (Throwable ignored) {}
+
+        // Fallback if DesignCore is not loaded
+        Bukkit.broadcastMessage(ChatColor.YELLOW + player.getName() + " joined the game");
     }
 
     public void updateVisibility(Player vanishedPlayer) {
@@ -156,6 +238,8 @@ public class VanishManager {
     public void onPlayerJoin(Player player) {
         // If this joining player was saved as vanished, re-apply vanish automatically
         if (isVanished(player.getUniqueId())) {
+            // Set metadata immediately so DesignCore knows they are vanished and skips broadcasting
+            player.setMetadata("vanished", new FixedMetadataValue(this.plugin, true));
             player.setPlayerListName(ChatColor.GRAY + "[v] " + ChatColor.ITALIC + player.getName());
             updateVisibility(player);
             player.sendMessage(plugin.getMessageManager().color("&aYou logged in while vanished. (Visible only to staff)"));
@@ -178,7 +262,6 @@ public class VanishManager {
     }
 
     public void onPlayerQuit(Player player) {
-        // We do NOT remove from vanishedPlayers so they stay vanished when relogging!
         if (plugin.getPhaseManager() != null) {
             plugin.getPhaseManager().remove(player.getUniqueId());
         }
