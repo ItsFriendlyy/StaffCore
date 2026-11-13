@@ -6,7 +6,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
-import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -21,6 +20,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.ServerListPingEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 
 import java.util.Map;
@@ -31,51 +31,47 @@ public class VanishListener implements Listener {
 
     private final StaffCore plugin;
     public static final String SILENT_CONTAINER_PREFIX = ChatColor.DARK_GRAY + "Silent: " + ChatColor.DARK_AQUA;
-    private final Map<UUID, InventoryHolder> activeSilentContainers = new ConcurrentHashMap<>();
+    private final Map<UUID, Block> activeSilentBlocks = new ConcurrentHashMap<>();
 
     public VanishListener(StaffCore plugin) {
         this.plugin = plugin;
     }
 
-    // LOWEST runs first: marks metadata so DesignCore skips broadcasting, and silences vanilla join
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onJoinEarly(PlayerJoinEvent event) {
+    public void onJoinLowest(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
-            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
             event.setJoinMessage(null);
+            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
+        } else {
+            player.removeMetadata("vanished", plugin);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onJoinLate(PlayerJoinEvent event) {
+    public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
-            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
             event.setJoinMessage(null);
         }
         plugin.getVanishManager().onPlayerJoin(player);
     }
 
-    // LOWEST runs first: marks metadata so DesignCore skips quit broadcast, and silences vanilla quit
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onQuitEarly(PlayerQuitEvent event) {
-        Player player = event.getPlayer();
-        if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
-            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
+    public void onQuitLowest(PlayerQuitEvent event) {
+        if (plugin.getVanishManager().isVanished(event.getPlayer().getUniqueId())) {
             event.setQuitMessage(null);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onQuitLate(PlayerQuitEvent event) {
+    public void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         if (plugin.getVanishManager().isVanished(player.getUniqueId())) {
-            player.setMetadata("vanished", new FixedMetadataValue(plugin, true));
             event.setQuitMessage(null);
         }
         plugin.getVanishManager().onPlayerQuit(player);
-        activeSilentContainers.remove(player.getUniqueId());
+        activeSilentBlocks.remove(player.getUniqueId());
     }
 
     @EventHandler
@@ -93,6 +89,7 @@ public class VanishListener implements Listener {
     /**
      * Silent Chest & Shulker Opening:
      * When vanished or in /phase, right-clicking containers opens them without animation or sound.
+     * Supports full 54-slot Double Chests and safely syncs edits directly to the live block state.
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onContainerInteract(PlayerInteractEvent event) {
@@ -129,28 +126,35 @@ public class VanishListener implements Listener {
         }
 
         BlockState state = block.getState();
-        Inventory targetInv = null;
-        InventoryHolder holder = null;
+        if (!(state instanceof InventoryHolder)) return;
 
-        if (state instanceof InventoryHolder) {
-            holder = (InventoryHolder) state;
-            if (state instanceof Chest) {
-                targetInv = ((Chest) state).getBlockInventory();
-            } else {
-                targetInv = ((InventoryHolder) state).getInventory();
-            }
-        }
-
+        // getInventory() returns full 54-slot DoubleChestInventory for double chests and 27-slot for single chests
+        Inventory targetInv = ((InventoryHolder) state).getInventory();
         if (targetInv == null) return;
 
-        String friendlyName = formatContainerName(matName);
+        int size = targetInv.getSize();
+        String friendlyName = (isChest && size == 54) ? "Double Chest" : formatContainerName(matName);
         String title = SILENT_CONTAINER_PREFIX + friendlyName;
         if (title.length() > 32) title = title.substring(0, 32);
 
-        Inventory silentView = Bukkit.createInventory(player, targetInv.getSize(), title);
-        silentView.setContents(targetInv.getContents());
+        // Open an unlinked custom mirror view so the chest block lid NEVER opens on client screens
+        Inventory silentView;
+        if (size % 9 == 0) {
+            silentView = Bukkit.createInventory(player, size, title);
+        } else {
+            silentView = Bukkit.createInventory(player, targetInv.getType(), title);
+        }
 
-        activeSilentContainers.put(player.getUniqueId(), holder);
+        ItemStack[] originalContents = targetInv.getContents();
+        ItemStack[] clonedContents = new ItemStack[originalContents.length];
+        for (int i = 0; i < originalContents.length; i++) {
+            if (originalContents[i] != null) {
+                clonedContents[i] = originalContents[i].clone();
+            }
+        }
+        silentView.setContents(clonedContents);
+
+        activeSilentBlocks.put(player.getUniqueId(), block);
         player.openInventory(silentView);
         player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 "&8[&bVanish&8] &7Opened &e" + friendlyName + " &7silently (no animation or sound)."));
@@ -164,15 +168,11 @@ public class VanishListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player player = (Player) event.getWhoClicked();
 
-        InventoryHolder holder = activeSilentContainers.get(player.getUniqueId());
-        if (holder == null) return;
+        Block block = activeSilentBlocks.get(player.getUniqueId());
+        if (block == null) return;
 
         Inventory top = event.getView().getTopInventory();
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            try {
-                holder.getInventory().setContents(top.getContents());
-            } catch (Throwable ignored) {}
-        });
+        Bukkit.getScheduler().runTask(plugin, () -> syncMirrorToRealContainer(block, top));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -183,15 +183,11 @@ public class VanishListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player player = (Player) event.getWhoClicked();
 
-        InventoryHolder holder = activeSilentContainers.get(player.getUniqueId());
-        if (holder == null) return;
+        Block block = activeSilentBlocks.get(player.getUniqueId());
+        if (block == null) return;
 
         Inventory top = event.getView().getTopInventory();
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            try {
-                holder.getInventory().setContents(top.getContents());
-            } catch (Throwable ignored) {}
-        });
+        Bukkit.getScheduler().runTask(plugin, () -> syncMirrorToRealContainer(block, top));
     }
 
     @EventHandler
@@ -202,12 +198,32 @@ public class VanishListener implements Listener {
         if (!(event.getPlayer() instanceof Player)) return;
         Player player = (Player) event.getPlayer();
 
-        InventoryHolder holder = activeSilentContainers.remove(player.getUniqueId());
-        if (holder != null) {
-            try {
-                holder.getInventory().setContents(event.getView().getTopInventory().getContents());
-            } catch (Throwable ignored) {}
-        }
+        // Only remove from tracking map; do NOT overwrite contents on close so merely inspecting a chest never wipes items
+        activeSilentBlocks.remove(player.getUniqueId());
+    }
+
+    private void syncMirrorToRealContainer(Block block, Inventory mirrorInv) {
+        if (block == null || mirrorInv == null) return;
+        try {
+            BlockState state = block.getState();
+            if (!(state instanceof InventoryHolder)) return;
+
+            Inventory realInv = ((InventoryHolder) state).getInventory();
+            if (realInv == null) return;
+
+            ItemStack[] mirrorContents = mirrorInv.getContents();
+            int limit = Math.min(realInv.getSize(), mirrorContents.length);
+            for (int i = 0; i < limit; i++) {
+                ItemStack item = mirrorContents[i];
+                realInv.setItem(i, item != null ? item.clone() : null);
+            }
+
+            // For Shulker Boxes, ensure BlockState snapshot is flushed if not backed by a live Inventory
+            String typeName = block.getType().name();
+            if (typeName.contains("SHULKER")) {
+                state.update(true, false);
+            }
+        } catch (Throwable ignored) {}
     }
 
     private String formatContainerName(String raw) {
